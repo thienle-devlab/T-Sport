@@ -85,7 +85,7 @@ app.get('/api/cart', authenticateToken, async (req, res) => {
             JOIN MucGioHang ON GioHang.ID = MucGioHang.IdGioHang
             JOIN MauSanPham ON MucGioHang.MaMau = MauSanPham.MaMau
             JOIN SanPham ON MauSanPham.MaSanPham = SanPham.MaSanPham
-            WHERE GioHang.MaNguoiDung = ?
+            WHERE GioHang.MaNguoiDung = ? AND MucGioHang.TrangThai = 'Chưa mua'
         `, [MaNguoiDung]);
 
         res.json(cartItems);
@@ -123,27 +123,27 @@ app.post('/api/cart/add', authenticateToken, async (req, res) => {
 
         // Kiểm tra xem sản phẩm đã có trong mục giỏ hàng chưa
         const [existingItem] = await db.query(
-            'SELECT * FROM MucGioHang WHERE IdGioHang = ? AND MaMau = ?',
+            'SELECT * FROM MucGioHang WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
             [cartId, MaMau]
         );
 
         if (existingItem.length > 0) {
             // Nếu sản phẩm đã tồn tại, cập nhật số lượng và tổng giá
             await db.query(
-                'UPDATE MucGioHang SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ?',
+                'UPDATE MucGioHang SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
                 [SoLuongSanPham, TongGiaSanPham, cartId, MaMau]
             );
         } else {
             // Nếu sản phẩm chưa tồn tại, thêm mới vào mục giỏ hàng
             await db.query(
-                'INSERT INTO MucGioHang (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham) VALUES (?, ?, ?, ?)',
+                'INSERT INTO MucGioHang (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham, TrangThai) VALUES (?, ?, ?, ?, "Chưa mua")',
                 [cartId, MaMau, SoLuongSanPham, TongGiaSanPham]
             );
         }
 
         // Cập nhật tổng giá trị giỏ hàng
         await db.query(
-            'UPDATE GioHang SET GiaTriGioHang = GiaTriGioHang + ? WHERE ID = ?',
+            'UPDATE GioHang SET GiaTriGioHang = (SELECT SUM(TongGiaSanPham) FROM MucGioHang WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
             [TongGiaSanPham, cartId]
         );
 
@@ -158,10 +158,10 @@ app.post('/api/cart/add', authenticateToken, async (req, res) => {
 
 // Cập nhật số lượng sản phẩm trong giỏ hàng
 app.put('/api/cart/update-quantity', authenticateToken, async (req, res) => {
-    const { MaMucGioHang, SoLuongSanPham } = req.body;
+    const { MaMucGioHang, SoLuongSanPham, isSelected } = req.body;
     const MaNguoiDung = req.user.MaNguoiDung;
   
-    console.log('Received data:', { MaMucGioHang, SoLuongSanPham, MaNguoiDung });
+    console.log('Received data:', { MaMucGioHang, SoLuongSanPham, isSelected, MaNguoiDung });
   
     if (!MaMucGioHang || SoLuongSanPham === undefined || SoLuongSanPham < 0) {
       return res.status(400).json({ message: 'Dữ liệu không hợp lệ' });
@@ -177,10 +177,11 @@ app.put('/api/cart/update-quantity', authenticateToken, async (req, res) => {
         JOIN MAUSANPHAM ms ON m.MaMau = ms.MaMau
         JOIN SANPHAM s ON ms.MaSanPham = s.MaSanPham
         SET m.SoLuongSanPham = ?,
-            m.TongGiaSanPham = s.GiaBan * ?
+            m.TongGiaSanPham = s.GiaBan * ?,
+            m.isSelected = ?
         WHERE m.MaMucGioHang = ? AND g.MaNguoiDung = ?
       `;
-      const [updateResult] = await db.query(updateMucGioHangQuery, [SoLuongSanPham, SoLuongSanPham, MaMucGioHang, MaNguoiDung]);
+      const [updateResult] = await db.query(updateMucGioHangQuery, [SoLuongSanPham, SoLuongSanPham, isSelected, MaMucGioHang, MaNguoiDung]);
   
       if (updateResult.affectedRows === 0) {
         await db.query('ROLLBACK');
@@ -193,7 +194,7 @@ app.put('/api/cart/update-quantity', authenticateToken, async (req, res) => {
         SET g.GiaTriGioHang = (
           SELECT SUM(m.TongGiaSanPham)
           FROM MUCGIOHANG m
-          WHERE m.IdGioHang = g.ID
+          WHERE m.IdGioHang = g.ID AND m.isSelected = TRUE
         )
         WHERE g.MaNguoiDung = ?
       `;
@@ -284,6 +285,259 @@ app.delete('/api/cart/remove-item', authenticateToken, async (req, res) => {
   }
 });
 
+// ==> API BÌNH LUẬN ĐÁNH GIÁ <==
+// Lấy thông tin bình luận đánh giá
+app.get('/api/reviews/:productId', authenticateToken, async (req, res) => {
+    const MaSanPham = req.params.productId;
+
+    try {
+        const [reviews] = await db.query(`
+            SELECT 
+                BINHLUAN.MaBinhLuan, 
+                BINHLUAN.NoiDung, 
+                BINHLUAN.NgayBinhLuan, 
+                BINHLUAN.MaNguoiDung, 
+                DANHGIA.SoSao,
+                NGUOIDUNG.TenNguoiDung
+            FROM BINHLUAN
+            LEFT JOIN DANHGIA ON BINHLUAN.MaDanhGia = DANHGIA.MaDanhGia
+            JOIN NGUOIDUNG ON BINHLUAN.MaNguoiDung = NGUOIDUNG.MaNguoiDung
+            WHERE BINHLUAN.MaSanPham = ?
+        `, [MaSanPham]);
+
+        res.json(reviews);
+    } catch (error) {
+        console.error('Lỗi khi lấy thông tin bình luận và đánh giá:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy thông tin bình luận và đánh giá' });
+    }
+});
+
+// Lưu thông tin bình luận đánh giá
+app.post('/api/save/reviews', authenticateToken, async (req, res) => {
+    const MaNguoiDung = req.user.MaNguoiDung;
+    const { MaSanPham, NoiDung, SoSao } = req.body;
+  
+    try {
+      await db.query('START TRANSACTION');
+  
+      // Lưu đánh giá và lấy MaDanhGia
+      const [result] = await db.query(`
+        INSERT INTO DANHGIA (MaSanPham, MaNguoiDung, SoSao)
+        VALUES (?, ?, ?)
+      `, [MaSanPham, MaNguoiDung, SoSao]);
+  
+      const MaDanhGia = result.insertId; // Lấy ID của đánh giá vừa được thêm
+  
+      // Lưu bình luận với MaDanhGia
+      await db.query(`
+        INSERT INTO BINHLUAN (MaSanPham, MaNguoiDung, NoiDung, MaDanhGia)
+        VALUES (?, ?, ?, ?)
+      `, [MaSanPham, MaNguoiDung, NoiDung, MaDanhGia]);
+  
+      await db.query('COMMIT');
+      res.status(201).json({ message: 'Bình luận và đánh giá đã được thêm thành công' });
+    } catch (error) {
+      await db.query('ROLLBACK');
+      console.error('Lỗi khi lưu bình luận và đánh giá:', error);
+      res.status(500).json({ error: 'Đã xảy ra lỗi khi lưu bình luận và đánh giá' });
+    }
+  });
+
+// ==> API THANH TOÁN <==
+app.post('/api/checkout', authenticateToken, async (req, res) => {
+    const MaNguoiDung = req.user.MaNguoiDung;
+    const { 
+      selectedItems, 
+      TenNguoiNhan, 
+      DiaChiGiaoHang, 
+      SDTNguoiNhan, 
+      GhiChu,
+      TongTien,
+      PhuongThucThanhToan
+    } = req.body;
+  
+    try {
+      await db.query('START TRANSACTION');
+  
+      // 1. Tạo đơn hàng mới
+      const NgayDatHang = new Date();
+      const NgayGiaoHang = new Date(NgayDatHang.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 ngày sau
+      const [orderResult] = await db.query(
+        'INSERT INTO DONHANG (MaNguoiDung, NgayDatHang, TongTien, TenNguoiNhan, DiaChiGiaoHang, SDTNguoiNhan, NgayGiaoHang, GhiChu) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [MaNguoiDung, NgayDatHang, TongTien, TenNguoiNhan, DiaChiGiaoHang, SDTNguoiNhan, NgayGiaoHang, GhiChu]
+      );
+      const MaDonHang = orderResult.insertId;
+  
+      // 2. Chuyển các mục đã chọn vào chi tiết đơn hàng
+      const insertChiTietDonHangQuery = `
+        INSERT INTO CHITIETDONHANG (MaDonHang, MaMucGioHang, SoLuong, Gia, TrangThai)
+        SELECT 
+            ?, 
+            m.MaMucGioHang, 
+            m.SoLuongSanPham, 
+            s.GiaBan,
+            'Chờ xác nhận'
+        FROM MUCGIOHANG m
+        JOIN MAUSANPHAM ms ON m.MaMau = ms.MaMau
+        JOIN SANPHAM s ON ms.MaSanPham = s.MaSanPham
+        WHERE m.MaMucGioHang IN (?)
+      `;
+      await db.query(insertChiTietDonHangQuery, [MaDonHang, selectedItems]);
+  
+      // 3. Cập nhật trạng thái các mục giỏ hàng đã chọn
+      const updateMucGioHangQuery = `
+        UPDATE MUCGIOHANG m
+        JOIN GIOHANG g ON m.IdGioHang = g.ID
+        SET m.TrangThai = 'Đã mua'
+        WHERE m.MaMucGioHang IN (?) AND g.MaNguoiDung = ?
+      `;
+      await db.query(updateMucGioHangQuery, [selectedItems, MaNguoiDung]);
+      
+      // 4. Thêm thông tin vào bảng thanh toán
+      const insertThanhToanQuery = `
+        INSERT INTO THANHTOAN (MaDonHang, NgayThanhToan, SoTienThanhToan, PhuongThucThanhToan, TrangThaiThanhToan)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      // Tạo một đối tượng chứa dữ liệu thanh toán
+      const thanhToanData = {
+        MaDonHang,
+        NgayThanhToan: new Date(),
+        SoTienThanhToan: TongTien,
+        PhuongThucThanhToan,
+        TrangThaiThanhToan: 'Chưa thanh toán'
+    };
+    const [insertResult] = await db.query(insertThanhToanQuery, Object.values(thanhToanData));
+    console.log('Dữ liệu thanh toán:', insertResult);
+      
+      await db.query('COMMIT');
+  
+      res.json({ message: 'Thanh toán thành công', MaDonHang });
+    } catch (error) {
+      await db.query('ROLLBACK');
+      console.error('Lỗi khi thanh toán:', error);
+      res.status(500).json({ error: 'Đã xảy ra lỗi khi thanh toán' });
+    }
+  });
+
+
+  // ==> API LICH SU DON HANG <==
+  app.get('/data/order-history', authenticateToken, async (req, res) => {
+    const MaNguoiDung = req.user.MaNguoiDung; 
+
+    try {
+        const [orders] = await db.query(`
+            SELECT 
+                d.MaDonHang,
+                d.NgayDatHang,
+                d.TongTien,
+                d.TenNguoiNhan,
+                d.DiaChiGiaoHang,
+                d.SDTNguoiNhan,
+                ct.MaChiTietDonHang,
+                ct.SoLuong,
+                ct.Gia,
+                ct.TrangThai AS ChiTietTrangThai,
+                m.MaMucGioHang,
+                m.SoLuongSanPham,
+                m.TongGiaSanPham,
+                s.TenSanPham,
+                s.HinhAnhChinh,
+                ms.MaMau,
+                ms.KichThuoc,
+                ms.MauSac,
+                ms.KieuDang
+            FROM 
+                DONHANG d
+            JOIN 
+                CHITIETDONHANG ct ON d.MaDonHang = ct.MaDonHang
+            JOIN 
+                MUCGIOHANG m ON ct.MaMucGioHang = m.MaMucGioHang
+            JOIN 
+                SANPHAM s ON m.MaMau = s.MaSanPham
+            JOIN 
+                MAUSANPHAM ms ON m.MaMau = ms.MaMau
+            WHERE 
+                d.MaNguoiDung = ? AND ct.TrangThai <> 'Đã hủy'  -- Chỉ định rõ ràng bảng ct
+        `, [MaNguoiDung]);
+
+        // Tổ chức lại dữ liệu để dễ dàng sử dụng trong frontend
+        const organizedOrders = orders.reduce((acc, order) => {
+            const { MaDonHang, NgayDatHang, TongTien, TenNguoiNhan, DiaChiGiaoHang, SDTNguoiNhan, HinhAnhChinh, TenSanPham } = order;
+            if (!acc[MaDonHang]) {
+                acc[MaDonHang] = {
+                    id: MaDonHang,
+                    date: NgayDatHang,
+                    total: TongTien,
+                    name: TenNguoiNhan,
+                    address: DiaChiGiaoHang,
+                    phone: SDTNguoiNhan,
+                    items: []
+                };
+            }
+            acc[MaDonHang].items.push({
+                id: order.MaChiTietDonHang,
+                quantity: order.SoLuong,
+                price: order.Gia,
+                status: order.ChiTietTrangThai,
+                productId: order.MaMucGioHang,
+                totalPrice: order.TongGiaSanPham,
+                productName: TenSanPham,
+                productImage: HinhAnhChinh,
+                sampleId: order.MaMau,
+                size: order.KichThuoc,
+                color: order.MauSac,
+                style: order.KieuDang
+            });
+            return acc;
+        }, {});
+
+        res.json(Object.values(organizedOrders)); // Trả về danh sách đơn hàng
+    } catch (error) {
+        console.error('Lỗi khi lấy lịch sử đơn hàng:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy lịch sử đơn hàng' });
+    }
+});
+
+
+//  ==> HỦY ĐƠN HÀNG <==
+app.put('/api/order/cancel/:orderId', authenticateToken, async (req, res) => {
+    const { orderId } = req.params;
+
+    try {
+        // Cập nhật trạng thái của tất cả sản phẩm trong đơn hàng thành "Đã hủy"
+        const updateQuery = `
+            UPDATE CHITIETDONHANG
+            SET TrangThai = 'Đã hủy'
+            WHERE MaDonHang = ?
+        `;
+        await db.query(updateQuery, [orderId]);
+
+        res.json({ message: 'Đơn hàng đã được hủy thành công' });
+    } catch (error) {
+        console.error('Lỗi khi hủy đơn hàng:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi hủy đơn hàng' });
+    }
+});
+
+// ==> HỦY SẢN PHẨM TRONG ĐƠN HÀNG <==
+app.put('/api/order/cancel-item/:orderId/:itemId', authenticateToken, async (req, res) => {
+    const { orderId, itemId } = req.params;
+
+    try {
+        // Cập nhật trạng thái của sản phẩm thành "Đã hủy"
+        const updateQuery = `
+            UPDATE CHITIETDONHANG
+            SET TrangThai = 'Đã hủy'
+            WHERE MaDonHang = ? AND MaChiTietDonHang = ?
+        `;
+        await db.query(updateQuery, [orderId, itemId]);
+
+        res.json({ message: 'Sản phẩm đã được hủy thành công' });
+    } catch (error) {
+        console.error('Lỗi khi hủy sản phẩm:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi hủy sản phẩm' });
+    }
+});
 
 // ==> API TAIKHOAN <==
 
