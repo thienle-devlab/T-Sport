@@ -440,6 +440,7 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
                 m.MaMucGioHang,
                 m.SoLuongSanPham,
                 m.TongGiaSanPham,
+                s.MaSanPham,
                 s.TenSanPham,
                 s.HinhAnhChinh,
                 ms.MaMau,
@@ -453,45 +454,63 @@ app.post('/api/checkout', authenticateToken, async (req, res) => {
             JOIN 
                 MUCGIOHANG m ON ct.MaMucGioHang = m.MaMucGioHang
             JOIN 
-                SANPHAM s ON m.MaMau = s.MaSanPham
-            JOIN 
                 MAUSANPHAM ms ON m.MaMau = ms.MaMau
+            JOIN 
+                SANPHAM s ON ms.MaSanPham = s.MaSanPham
             WHERE 
-                d.MaNguoiDung = ? AND ct.TrangThai <> 'Đã hủy'  -- Chỉ định rõ ràng bảng ct
+                d.MaNguoiDung = ? AND ct.TrangThai <> 'Đã hủy'
+            ORDER BY 
+                d.NgayDatHang DESC, d.MaDonHang, ct.MaChiTietDonHang
         `, [MaNguoiDung]);
 
-        // Tổ chức lại dữ liệu để dễ dàng sử dụng trong frontend
+        // Tổ chức lại dữ liệu theo cấu trúc mong muốn
         const organizedOrders = orders.reduce((acc, order) => {
-            const { MaDonHang, NgayDatHang, TongTien, TenNguoiNhan, DiaChiGiaoHang, SDTNguoiNhan, HinhAnhChinh, TenSanPham } = order;
-            if (!acc[MaDonHang]) {
-                acc[MaDonHang] = {
-                    id: MaDonHang,
-                    date: NgayDatHang,
-                    total: TongTien,
-                    name: TenNguoiNhan,
-                    address: DiaChiGiaoHang,
-                    phone: SDTNguoiNhan,
+            const orderId = order.MaDonHang;
+            
+            // Nếu đơn hàng chưa tồn tại, tạo mới
+            if (!acc[orderId]) {
+                acc[orderId] = {
+                    id: orderId,
+                    date: new Date(order.NgayDatHang).toLocaleDateString('vi-VN'),
+                    total: order.TongTien,
+                    name: order.TenNguoiNhan,
+                    address: order.DiaChiGiaoHang,
+                    phone: order.SDTNguoiNhan,
                     items: []
                 };
             }
-            acc[MaDonHang].items.push({
-                id: order.MaChiTietDonHang,
-                quantity: order.SoLuong,
-                price: order.Gia,
-                status: order.ChiTietTrangThai,
-                productId: order.MaMucGioHang,
-                totalPrice: order.TongGiaSanPham,
-                productName: TenSanPham,
-                productImage: HinhAnhChinh,
-                sampleId: order.MaMau,
-                size: order.KichThuoc,
-                color: order.MauSac,
-                style: order.KieuDang
-            });
+
+            // Thêm sản phẩm vào đơn hàng
+            const existingItem = acc[orderId].items.find(
+                item => item.id === order.MaChiTietDonHang
+            );
+
+            if (!existingItem) {
+                acc[orderId].items.push({
+                    id: order.MaChiTietDonHang,
+                    productId: order.MaSanPham,
+                    productName: order.TenSanPham,
+                    productImage: order.HinhAnhChinh,
+                    quantity: order.SoLuong,
+                    price: order.Gia,
+                    status: order.ChiTietTrangThai,
+                    cartItemId: order.MaMucGioHang,
+                    totalPrice: order.TongGiaSanPham,
+                    sampleId: order.MaMau,
+                    size: order.KichThuoc,
+                    color: order.MauSac,
+                    style: order.KieuDang
+                });
+            }
+
             return acc;
         }, {});
 
-        res.json(Object.values(organizedOrders)); // Trả về danh sách đơn hàng
+        // Log để debug
+        console.log('Raw orders data:', orders);
+        console.log('Organized orders:', Object.values(organizedOrders));
+
+        res.json(Object.values(organizedOrders));
     } catch (error) {
         console.error('Lỗi khi lấy lịch sử đơn hàng:', error);
         res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy lịch sử đơn hàng' });
