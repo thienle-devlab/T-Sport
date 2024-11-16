@@ -12,6 +12,7 @@ const cookieParser = require('cookie-parser');
 const authenticateToken = require('./authMiddleware');
 const { v4: uuidv4 } = require('uuid');
 const { promisify } = require('util');
+const { timeStamp } = require('console');
 
 const app = express()
 const port = 3001
@@ -327,6 +328,7 @@ app.post('/api/save/reviews', authenticateToken, async (req, res) => {
       `, [MaSanPham, MaNguoiDung, SoSao]);
   
       const MaDanhGia = result.insertId; // Lấy ID của đánh giá vừa được thêm
+      console.log('MaDanhGia:', MaDanhGia);
   
       // Lưu bình luận với MaDanhGia
       await db.query(`
@@ -557,6 +559,169 @@ app.put('/api/order/cancel-item/:orderId/:itemId', authenticateToken, async (req
         res.status(500).json({ error: 'Đã xảy ra lỗi khi hủy sản phẩm' });
     }
 });
+
+// ==> API lấy tất cả đơn hàng cho admin <==
+app.get('/data/admin/orders', authenticateToken, async (req, res) => {
+    try {
+        const [orders] = await db.query(`
+            SELECT 
+                d.MaDonHang,
+                d.NgayDatHang,
+                d.TongTien,
+                d.TenNguoiNhan,
+                d.DiaChiGiaoHang,
+                d.SDTNguoiNhan,
+                ct.MaChiTietDonHang,
+                ct.SoLuong,
+                ct.Gia,
+                ct.TrangThai,
+                s.MaSanPham,
+                s.TenSanPham,
+                s.HinhAnhChinh,
+                ms.MaMau,
+                ms.KichThuoc,
+                ms.MauSac,
+                ms.KieuDang
+            FROM 
+                DONHANG d
+            JOIN 
+                CHITIETDONHANG ct ON d.MaDonHang = ct.MaDonHang
+            JOIN 
+                MUCGIOHANG m ON ct.MaMucGioHang = m.MaMucGioHang
+            JOIN 
+                MAUSANPHAM ms ON m.MaMau = ms.MaMau
+            JOIN 
+                SANPHAM s ON ms.MaSanPham = s.MaSanPham
+            ORDER BY 
+                d.NgayDatHang DESC, d.MaDonHang, ct.MaChiTietDonHang
+        `);
+
+        // Tổ chức lại dữ liệu theo cấu trúc của giao diện
+        const organizedOrders = orders.reduce((acc, order) => {
+            const orderId = order.MaDonHang;
+            
+            if (!acc[orderId]) {
+                acc[orderId] = {
+                    id: orderId,
+                    date: new Date(order.NgayDatHang).toLocaleDateString('vi-VN'),
+                    status: order.TrangThai,
+                    customer: {
+                        name: order.TenNguoiNhan,
+                        address: order.DiaChiGiaoHang,
+                        phone: order.SDTNguoiNhan
+                    },
+                    items: []
+                };
+            }
+
+            // Thêm sản phẩm vào đơn hàng
+            acc[orderId].items.push({
+                productImage: order.HinhAnhChinh,
+                name: order.TenSanPham,
+                quantity: order.SoLuong,
+                color: order.MauSac,
+                size: order.KichThuoc,
+                style: order.KieuDang,
+                totalPrice: order.Gia
+            });
+
+            return acc;
+        }, {});
+
+        res.json(Object.values(organizedOrders));
+    } catch (error) {
+        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng' });
+    }
+});
+
+// ==> API cập nhật trạng thái đơn hàng <==
+app.put('/api/order/:action/:orderId', authenticateToken, async (req, res) => {
+    const { action, orderId } = req.params;
+    let newStatus;
+    console.log('Action', action, 'OrderId', orderId);
+
+    // Xác định trạng thái mới dựa vào action
+    switch (action) {
+        case 'Chờ xác nhận':
+            newStatus = 'Chờ xác nhận';
+            break;
+        case 'Đã xác nhận':
+            newStatus = 'Đã xác nhận';
+            break;
+        case 'Đã hủy':
+            newStatus = 'Đã Hủy';
+            break;
+        case 'Đang giao':
+            newStatus = 'Đang giao';
+            break;
+        case 'Hoàn Thành':
+            newStatus = 'Hoàn Thành';
+            break;
+        default:
+            return res.status(400).json({ error: 'Hành động không hợp lệ' });
+    }
+    console.log('Action', action)
+
+    try {
+        await db.query(
+            'UPDATE CHITIETDONHANG SET TrangThai = ? WHERE MaDonHang = ?',
+            [newStatus, orderId]
+        );
+        console.log('Action', action)
+
+        res.json({ message: 'Cập nhật trạng thái đơn hàng thành công' });
+    } catch (error) {
+        console.error('Lỗi khi cập nhật trạng thái đơn hàng:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi cập nhật trạng thái đơn hàng' });
+    }
+});
+
+// ==> API HỆ ĐỀ XUẤT SẢN PHẨM <==
+app.post('/api/user-action', authenticateToken, async (req, res) => {
+    const { MaSanPham, LoaiHanhVi } = req.body;
+    const MaNguoiDung = req.user.MaNguoiDung;
+
+    // Ghi log các giá trị đầu vào
+    console.log('Received request with data:', {
+        MaNguoiDung,
+        MaSanPham,
+        LoaiHanhVi
+    });
+
+    if (!MaNguoiDung || !MaSanPham || !LoaiHanhVi) {
+        console.error('Missing required information:', {
+            MaNguoiDung,
+            MaSanPham,
+            LoaiHanhVi
+        });
+        return res.status(400).json({ message: 'Thông tin yêu cầu không hợp lệ' });
+    }
+
+    const userAction = {
+        MaNguoiDung,
+        MaSanPham,
+        LoaiHanhVi,
+        ThoiGian: new Date()
+    };
+
+    // Câu truy vấn SQL
+    const query = 'INSERT INTO HANHVINGUOIDUNG (MaNguoiDung, MaSanPham, LoaiHanhVi, ThoiGian) VALUES (?, ?, ?, ?)';
+    const values = [userAction.MaNguoiDung, userAction.MaSanPham, userAction.LoaiHanhVi, userAction.ThoiGian];
+
+    try {
+        await db.query(query, values); // Chạy truy vấn SQL để lưu hành vi người dùng
+        console.log('User action inserted successfully:', userAction);
+        return res.status(200).json({ message: 'Hành vi người dùng được lưu thành công' });
+    } catch (err) {
+        console.error('Error inserting user action:', err);
+        return res.status(500).json({ message: 'Lỗi khi lưu hành vi người dùng' });
+    }
+});
+
+
+
+
 
 // ==> API TAIKHOAN <==
 
