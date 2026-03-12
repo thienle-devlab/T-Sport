@@ -10,16 +10,18 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const authenticateToken = require('./authMiddleware');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const multerS3 = require('multer-s3');
 const { v4: uuidv4 } = require('uuid');
 const { promisify } = require('util');
 const { timeStamp } = require('console');
 
 const app = express()
-const port = 3001
+const port = process.env.PORT || 3001
 
 app.use(cors(
     {
-        origin: ['http://localhost:3000', 'http://localhost:3002'], // URL của ứng dụng front-end và dashboard
+        origin: ['http://localhost:3000'], // URL của ứng dụng front-end và dashboard , 'http://localhost:3002'
         credentials: true // Cho phép gửi cookies và thông tin xác thực
     }
 ))
@@ -56,15 +58,46 @@ console.log('Current SECRET_KEY:', process.env.SECRET_KEY);
 //     }
 //   }
 
+//-----------------------------------------------------------------
 // Cấu hình lưu trữ cho multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, '../fe_tsport/public/images') // Thư mục để lưu trữ file
-    },
-    filename: (req, file, cb) => {
-        cb(null, file.fieldname + "_" + Date.now() + path.extname(file.originalname)) // Tên file sẽ lưu trữ
+// const storage = multer.diskStorage({
+//     destination: (req, file, cb) => {
+//         cb(null, '../fe_tsport/public/images') // Thư mục để lưu trữ file
+//     },
+//     filename: (req, file, cb) => {
+//         cb(null, file.fieldname + "_" + Date.now() + path.extname(file.originalname)) // Tên file sẽ lưu trữ
+//     }
+// })
+//-----------------------------------------------------------------
+
+// Upload ảnh với Tebi
+// Cấu hình S3 Client
+const s3 = new S3Client({
+    region: 'ap-southeast-1',
+    endpoint: "https://s3.tebi.io",
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY,
+        secretAccessKey: process.env.AWS_SECRET_KEY
     }
-})
+});
+console.log(process.env.AWS_ACCESS_KEY);
+console.log(process.env.AWS_SECRET_KEY);
+
+
+// Cấu hình multer để sử dụng S3
+const uploadTebi = multer({
+    storage: multerS3({
+        s3: s3,
+        bucket: 'images-tsport', // Thay bằng tên bucket của bạn
+        acl: 'public-read', // Quyền truy cập vào file (có thể thay đổi theo nhu cầu)
+        contentType: multerS3.AUTO_CONTENT_TYPE, // Tự động nhận diện loại content của file
+        key: (req, file, cb) => {
+            // Đặt tên file dựa trên thời gian để tránh trùng lặp
+            cb(null, `product-images/${Date.now()}_${path.basename(file.originalname)}`);
+        }
+    })
+});
+
 
 // Lấy giỏ hàng của người dùng
 // ** Route cho giỏ hàng **
@@ -144,8 +177,8 @@ app.post('/api/cart/add', authenticateToken, async (req, res) => {
 
         // Cập nhật tổng giá trị giỏ hàng
         await db.query(
-            'UPDATE GioHang SET GiaTriGioHang = (SELECT SUM(TongGiaSanPham) FROM MucGioHang WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
-            [TongGiaSanPham, cartId]
+            'UPDATE GioHang SET GiaTriGioHang = (SELECT IFNULL(SUM(TongGiaSanPham), 0) FROM MucGioHang WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
+            [cartId, cartId]
         );
 
         await db.query('COMMIT');
@@ -318,23 +351,32 @@ app.post('/api/save/reviews', authenticateToken, async (req, res) => {
     const MaNguoiDung = req.user.MaNguoiDung;
     const { MaSanPham, NoiDung, SoSao } = req.body;
   
+    // Lấy ngày hiện tại
+    const currentDate = new Date();
+    const NgayDanhGia = currentDate.toISOString().split('T')[0]; // Định dạng YYYY-MM-DD
+    const NgayBinhLuan = currentDate.toISOString().split('T')[0]; // Định dạng YYYY-MM-DD
+  
     try {
+      console.log('Dữ liệu nhận được từ client:', {
+        MaSanPham, NoiDung, NgayBinhLuan, NgayDanhGia, SoSao
+      });
+  
       await db.query('START TRANSACTION');
   
       // Lưu đánh giá và lấy MaDanhGia
       const [result] = await db.query(`
-        INSERT INTO DANHGIA (MaSanPham, MaNguoiDung, SoSao)
-        VALUES (?, ?, ?)
-      `, [MaSanPham, MaNguoiDung, SoSao]);
+        INSERT INTO DANHGIA (MaSanPham, MaNguoiDung, NgayDanhGia, SoSao)
+        VALUES (?, ?, ?, ?)
+      `, [MaSanPham, MaNguoiDung, NgayDanhGia, SoSao]);
   
       const MaDanhGia = result.insertId; // Lấy ID của đánh giá vừa được thêm
       console.log('MaDanhGia:', MaDanhGia);
   
       // Lưu bình luận với MaDanhGia
       await db.query(`
-        INSERT INTO BINHLUAN (MaSanPham, MaNguoiDung, NoiDung, MaDanhGia)
-        VALUES (?, ?, ?, ?)
-      `, [MaSanPham, MaNguoiDung, NoiDung, MaDanhGia]);
+        INSERT INTO BINHLUAN (MaSanPham, MaNguoiDung, NgayBinhLuan, NoiDung, MaDanhGia)
+        VALUES (?, ?, ?, ?, ?)
+      `, [MaSanPham, MaNguoiDung, NgayBinhLuan, NoiDung, MaDanhGia]);
   
       await db.query('COMMIT');
       res.status(201).json({ message: 'Bình luận và đánh giá đã được thêm thành công' });
@@ -344,6 +386,7 @@ app.post('/api/save/reviews', authenticateToken, async (req, res) => {
       res.status(500).json({ error: 'Đã xảy ra lỗi khi lưu bình luận và đánh giá' });
     }
   });
+  
 
 // ==> API THANH TOÁN <==
 app.post('/api/checkout', authenticateToken, async (req, res) => {
@@ -528,7 +571,7 @@ app.put('/api/order/cancel/:orderId', authenticateToken, async (req, res) => {
         // Cập nhật trạng thái của tất cả sản phẩm trong đơn hàng thành "Đã hủy"
         const updateQuery = `
             UPDATE CHITIETDONHANG
-            SET TrangThai = 'Đã hủy'
+            SET TrangThai = 'Đã Hủy'
             WHERE MaDonHang = ?
         `;
         await db.query(updateQuery, [orderId]);
@@ -548,7 +591,7 @@ app.put('/api/order/cancel-item/:orderId/:itemId', authenticateToken, async (req
         // Cập nhật trạng thái của sản phẩm thành "Đã hủy"
         const updateQuery = `
             UPDATE CHITIETDONHANG
-            SET TrangThai = 'Đã hủy'
+            SET TrangThai = 'Đã Hủy'
             WHERE MaDonHang = ? AND MaChiTietDonHang = ?
         `;
         await db.query(updateQuery, [orderId, itemId]);
@@ -574,7 +617,10 @@ app.get('/data/admin/orders', authenticateToken, async (req, res) => {
                 ct.MaChiTietDonHang,
                 ct.SoLuong,
                 ct.Gia,
-                ct.TrangThai,
+                ct.TrangThai AS ChiTietTrangThai,
+                m.MaMucGioHang,
+                m.SoLuongSanPham,
+                m.TongGiaSanPham,
                 s.MaSanPham,
                 s.TenSanPham,
                 s.HinhAnhChinh,
@@ -596,44 +642,63 @@ app.get('/data/admin/orders', authenticateToken, async (req, res) => {
                 d.NgayDatHang DESC, d.MaDonHang, ct.MaChiTietDonHang
         `);
 
-        // Tổ chức lại dữ liệu theo cấu trúc của giao diện
+        // Tổ chức lại dữ liệu theo cấu trúc mong muốn
         const organizedOrders = orders.reduce((acc, order) => {
             const orderId = order.MaDonHang;
             
+            // Nếu đơn hàng chưa tồn tại, tạo mới
             if (!acc[orderId]) {
                 acc[orderId] = {
                     id: orderId,
                     date: new Date(order.NgayDatHang).toLocaleDateString('vi-VN'),
-                    status: order.TrangThai,
-                    customer: {
-                        name: order.TenNguoiNhan,
-                        address: order.DiaChiGiaoHang,
-                        phone: order.SDTNguoiNhan
-                    },
+                    total: order.TongTien,
+                    name: order.TenNguoiNhan,
+                    address: order.DiaChiGiaoHang,
+                    phone: order.SDTNguoiNhan,
                     items: []
                 };
             }
 
             // Thêm sản phẩm vào đơn hàng
-            acc[orderId].items.push({
-                productImage: order.HinhAnhChinh,
-                name: order.TenSanPham,
-                quantity: order.SoLuong,
-                color: order.MauSac,
-                size: order.KichThuoc,
-                style: order.KieuDang,
-                totalPrice: order.Gia
-            });
+            const existingItem = acc[orderId].items.find(
+                item => item.id === order.MaChiTietDonHang
+            );
+
+            if (!existingItem) {
+                acc[orderId].items.push({
+                    id: order.MaChiTietDonHang,
+                    productId: order.MaSanPham,
+                    productName: order.TenSanPham,
+                    productImage: order.HinhAnhChinh,
+                    quantity: order.SoLuong,
+                    price: order.Gia,
+                    status: order.ChiTietTrangThai,
+                    cartItemId: order.MaMucGioHang,
+                    totalPrice: order.TongGiaSanPham,
+                    sampleId: order.MaMau,
+                    size: order.KichThuoc,
+                    color: order.MauSac,
+                    style: order.KieuDang
+                });
+            }
 
             return acc;
         }, {});
 
+        // Log để debug
+        console.log('Raw orders data:', orders);
+        console.log('Organized orders:', Object.values(organizedOrders));
+
         res.json(Object.values(organizedOrders));
     } catch (error) {
-        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
-        res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng' });
+        console.error('Lỗi khi lấy lịch sử đơn hàng:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi lấy lịch sử đơn hàng' });
     }
 });
+
+
+
+
 
 // ==> API cập nhật trạng thái đơn hàng <==
 app.put('/api/order/:action/:orderId', authenticateToken, async (req, res) => {
@@ -649,7 +714,7 @@ app.put('/api/order/:action/:orderId', authenticateToken, async (req, res) => {
         case 'Đã xác nhận':
             newStatus = 'Đã xác nhận';
             break;
-        case 'Đã hủy':
+        case 'Đã Hủy':
             newStatus = 'Đã Hủy';
             break;
         case 'Đang giao':
@@ -664,9 +729,10 @@ app.put('/api/order/:action/:orderId', authenticateToken, async (req, res) => {
     console.log('Action', action)
 
     try {
+        // Cập nhật trạng thái chỉ cho các chi tiết đơn hàng chưa bị hủy
         await db.query(
-            'UPDATE CHITIETDONHANG SET TrangThai = ? WHERE MaDonHang = ?',
-            [newStatus, orderId]
+            'UPDATE CHITIETDONHANG SET TrangThai = ? WHERE MaDonHang = ? AND TrangThai != ?',
+            [newStatus, orderId, 'Đã Hủy']
         );
         console.log('Action', action)
 
@@ -677,7 +743,8 @@ app.put('/api/order/:action/:orderId', authenticateToken, async (req, res) => {
     }
 });
 
-// ==> API HỆ ĐỀ XUẤT SẢN PHẨM <==
+
+// ==> API Lưu hành vi người dùng <==
 app.post('/api/user-action', authenticateToken, async (req, res) => {
     const { MaSanPham, LoaiHanhVi } = req.body;
     const MaNguoiDung = req.user.MaNguoiDung;
@@ -705,7 +772,6 @@ app.post('/api/user-action', authenticateToken, async (req, res) => {
         ThoiGian: new Date()
     };
 
-    // Câu truy vấn SQL
     const query = 'INSERT INTO HANHVINGUOIDUNG (MaNguoiDung, MaSanPham, LoaiHanhVi, ThoiGian) VALUES (?, ?, ?, ?)';
     const values = [userAction.MaNguoiDung, userAction.MaSanPham, userAction.LoaiHanhVi, userAction.ThoiGian];
 
@@ -719,9 +785,396 @@ app.post('/api/user-action', authenticateToken, async (req, res) => {
     }
 });
 
+// ==> API đề xuất sản phẩm <==
+// Hàm tính điểm tương tác của người dùng với sản phẩm
+function tinhDiemTuongTac(loaiHanhVi){
+    switch(loaiHanhVi){
+        case 'Xem':
+            return 1;
+        case 'ThemGioHang':
+            return 2;
+        case 'Mua':
+            return 3;
+        default:
+            return 0;
+    }
+}
+
+// Hàm tính độ tương đồng giữa hai người dùng sử dụng Cosine Similarity
+function tinhDoTuongDong(vector1, vector2) {
+    let dotProduct = 0;
+    let norm1 = 0;
+    let norm2 = 0;
+
+    for(const productID in vector1) {
+        if(vector2[productID]){
+            dotProduct += vector1[productID] * vector2[productID];
+        }
+        norm1 += vector1[productID] * vector1[productID];
+    }
+
+    for(const productID in vector2) {
+        norm2 += vector2[productID] * vector2[productID];
+    }
+
+    return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+// Hàm chính để lấy đề xuất sản phẩm
+app.get('/api/recommendations', authenticateToken, async (req, res) => {
+    try {
+        const maNguoiDung = req.user.MaNguoiDung;
+        const soLuongDeXuat = parseInt(req.query.limit) || 5;
+
+        console.log('maNguoiDung:', maNguoiDung);
+
+        // 1. Lấy dữ liệu hành vi của tất cả người dùng
+        const [rows] = await db.execute(`
+            SELECT MaNguoiDung, MaSanPham, LoaiHanhVi 
+            FROM HANHVINGUOIDUNG
+            WHERE ThoiGian >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        `);
+
+        console.log('Rows from HANHVINGUOIDUNG:', rows);
+
+        // 2. Tạo ma trận người dùng - sản phẩm
+        const userProductMatrix = {};
+        rows.forEach(row => {
+            if (!userProductMatrix[row.MaNguoiDung]) {
+                userProductMatrix[row.MaNguoiDung] = {};
+            }
+            userProductMatrix[row.MaNguoiDung][row.MaSanPham] = 
+                (userProductMatrix[row.MaNguoiDung][row.MaSanPham] || 0) + 
+                tinhDiemTuongTac(row.LoaiHanhVi);
+        });
+
+        console.log('User-Product Matrix:', userProductMatrix);
+
+        // 3. Tính độ tương đồng với các người dùng khác
+        const similarities = [];
+        const targetUserVector = userProductMatrix[maNguoiDung] || {};
+
+        console.log('Target User Vector:', targetUserVector);
+
+        for(const otherUserId in userProductMatrix) {
+            if(otherUserId != maNguoiDung) {
+                const similarity = tinhDoTuongDong(
+                    targetUserVector,
+                    userProductMatrix[otherUserId]
+                );
+                similarities.push({
+                    userId: otherUserId,
+                    similarity: similarity
+                });
+            }
+        }
+
+        console.log('Similarities:', similarities);
+
+        // 4. Sắp xếp và lấy top N người dùng tương đồng nhất
+        similarities.sort((a, b) => b.similarity - a.similarity);
+        const topSimilarUsers = similarities.slice(0, 10);
+
+        console.log('Top Similar Users:', topSimilarUsers);
+
+        // 5. Lấy các sản phẩm mà người dùng đã tương tác
+        const [productsInteracted] = await db.execute(`
+            SELECT DISTINCT MaSanPham 
+            FROM HANHVINGUOIDUNG 
+            WHERE MaNguoiDung = ?
+        `, [maNguoiDung]);
+
+        console.log('Products Interacted:', productsInteracted);
+
+        const productsInteractedSet = new Set(
+            productsInteracted.map(p => p.MaSanPham)
+        );
+
+        console.log('Products Interacted Set:', productsInteractedSet);
+
+        // 6. Tính điểm đề xuất cho các sản phẩm
+        const productScores = {};
+
+        for(const similarUser of topSimilarUsers) {
+            const [userProducts] = await db.execute(`
+                SELECT MaSanPham, LoaiHanhVi 
+                FROM HANHVINGUOIDUNG 
+                WHERE MaNguoiDung = ?
+            `, [similarUser.userId]);
+
+            console.log(`User Products for ${similarUser.userId}:`, userProducts);
+
+            userProducts.forEach(product => {
+                if(!productsInteractedSet.has(product.MaSanPham)) {
+                    productScores[product.MaSanPham] = 
+                        (productScores[product.MaSanPham] || 0) + 
+                        similarUser.similarity * tinhDiemTuongTac(product.LoaiHanhVi);
+                }
+            });
+        }
+
+        console.log('Product Scores:', productScores);
+
+        // 7. Sắp xếp và lấy top N sản phẩm đề xuất
+        const recommendedProducts = Object.entries(productScores)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, soLuongDeXuat)
+            .map(([productId]) => parseInt(productId));
+
+        console.log('Recommended Products:', recommendedProducts);
+
+        // 8. Lấy thông tin chi tiết của các sản phẩm đề xuất
+        if(recommendedProducts.length > 0) {
+            const [productDetails] = await db.execute(`
+                SELECT * FROM SANPHAM 
+                WHERE MaSanPham IN (${recommendedProducts.join(',')})
+            `);
+
+            console.log('Product Details:', productDetails);
+
+            res.json({
+                status: 'success',
+                data: productDetails
+            });
+        } else {
+            console.log('No Recommended Products found.');
+            res.json({
+                status: 'success',
+                data: []
+            });
+        }
+
+    } catch (error) {
+        console.error('Lỗi khi lấy đề xuất sản phẩm:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Lỗi khi lấy đề xuất sản phẩm',
+            error: error.message
+        });
+    }
+});
+
+
+  // ==> API kiểm tra hành vi người dùng <==
+  app.get('/api/user-behavior/check', async (req, res) => {
+    try {
+        // Lấy thông tin user từ cookie
+        const userCookie = req.cookies.user;
+        if (!userCookie) {
+            return res.status(401).json({ 
+                hasUserBehavior: false,
+                message: 'Không tìm thấy thông tin người dùng' 
+            });
+        }
+
+        const user = JSON.parse(userCookie);
+        const maNguoiDung = user.MaNguoiDung;
+
+        // Kiểm tra xem người dùng có hành vi nào không
+        const [rows] = await db.execute(`
+            SELECT COUNT(*) as behaviorCount 
+            FROM HANHVINGUOIDUNG 
+            WHERE MaNguoiDung = ?
+        `, [maNguoiDung]);
+
+        const hasUserBehavior = rows[0].behaviorCount > 0;
+
+        res.json({
+            hasUserBehavior,
+            message: hasUserBehavior ? 'Người dùng có hành vi' : 'Người dùng chưa có hành vi'
+        });
+
+    } catch (error) {
+        console.error('Lỗi khi kiểm tra hành vi người dùng:', error);
+        res.status(500).json({ 
+            hasUserBehavior: false,
+            message: 'Đã xảy ra lỗi khi kiểm tra hành vi người dùng',
+            error: error.message 
+        });
+    }
+});
 
 
 
+// ==> API Tính tổng doanh thu theo tháng <==
+app.get('/api/revenue', async (req, res) => {
+    const query = `
+      SELECT 
+          DATE_FORMAT(D.NgayDatHang, '%Y-%m') AS month, 
+          SUM(C.SoLuong * C.Gia) AS totalRevenue
+      FROM 
+          DONHANG D
+      JOIN 
+          CHITIETDONHANG C ON D.MaDonHang = C.MaDonHang
+      WHERE 
+          D.NgayDatHang IS NOT NULL
+          AND C.TrangThai != 'Đã Hủy'
+      GROUP BY 
+          month
+      ORDER BY 
+          month;
+    `;
+    
+    try {
+      const [results] = await db.execute(query);
+      console.log("Results from DB:", results); // In ra để kiểm tra
+      const formattedResults = results.map(item => ({
+        month: item.month,
+        totalRevenue: item.totalRevenue || 0,
+      }));
+      res.json(formattedResults);
+    } catch (err) {
+      console.error("Database query error:", err);
+      res.status(500).json({ error: err.message });
+    }
+});
+
+
+
+  // ==> API Tính tổng sản phẩm bán ra theo tháng <==
+  app.get('/api/products-sales', async (req, res) => {
+    const query = `
+      SELECT 
+          DATE_FORMAT(D.NgayDatHang, '%Y-%m') AS month, 
+          SUM(C.SoLuong) AS totalSales
+      FROM 
+          DONHANG D
+      JOIN 
+          CHITIETDONHANG C ON D.MaDonHang = C.MaDonHang
+      WHERE 
+          D.NgayDatHang IS NOT NULL
+          AND C.TrangThai != 'Đã Hủy'
+      GROUP BY 
+          month
+      ORDER BY 
+          month;
+    `;
+  
+    try {
+      const [results] = await db.execute(query);
+      console.log("Results from DB:", results);
+      const formattedResults = results.map(item => ({
+        month: item.month,
+        totalSales: item.totalSales || 0,
+      }));
+      res.json(formattedResults);
+    } catch (err) {
+      console.error("Database query error:", err);
+      res.status(500).json({ error: err.message });  // Trả lỗi với message chi tiết
+    }
+  });
+
+
+  // ==> API Tính sản phẩm tồn kho <==
+  app.get('/api/inventory', async (req, res) => {
+    const query = `
+        SELECT 
+            SP.TenSanPham,
+            SP.SoLuong AS totalStock,
+            COALESCE(SUM(CTDH.SoLuong), 0) AS totalSold,
+            (SP.SoLuong - COALESCE(SUM(CTDH.SoLuong), 0)) AS remainingStock
+        FROM 
+            SANPHAM SP
+        LEFT JOIN
+            MAUSANPHAM M ON SP.MaSanPham = M.MaSanPham
+        LEFT JOIN 
+            MUCGIOHANG MG ON M.MaMau = MG.MaMau
+        LEFT JOIN 
+            CHITIETDONHANG CTDH ON MG.MaMucGioHang = CTDH.MaMucGioHang
+        LEFT JOIN
+            DONHANG DH ON CTDH.MaDonHang = DH.MaDonHang
+        WHERE
+            CTDH.TrangThai != 'Đã Hủy'
+        GROUP BY 
+            SP.MaSanPham, SP.TenSanPham;
+    `;
+
+    try {
+        const [results] = await db.execute(query);
+        console.log("Results from DB:", results);
+        res.json(results);
+    } catch (err) {
+        console.error("Database query error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ==> API Tính top sản phẩm bán chạy nhất <==
+app.get('/api/top-products', async (req, res) => {
+    const query = `
+        SELECT 
+            SP.TenSanPham,
+            SP.GiaBan,
+            COALESCE(SUM(CTDH.SoLuong), 0) AS totalSold
+        FROM 
+            SANPHAM SP
+        LEFT JOIN
+            MAUSANPHAM M ON SP.MaSanPham = M.MaSanPham
+        LEFT JOIN 
+            MUCGIOHANG MG ON M.MaMau = MG.MaMau
+        LEFT JOIN 
+            CHITIETDONHANG CTDH ON MG.MaMucGioHang = CTDH.MaMucGioHang
+        LEFT JOIN
+            DONHANG DH ON CTDH.MaDonHang = DH.MaDonHang
+        WHERE
+            CTDH.TrangThai != 'Đã Hủy'
+        GROUP BY 
+            SP.MaSanPham, SP.TenSanPham, SP.GiaBan
+        ORDER BY 
+            totalSold DESC
+        LIMIT 5;
+    `;
+
+    try {
+        const [results] = await db.execute(query);
+        console.log("Results from DB:", results);
+        res.json(results);
+    } catch (err) {
+        console.error("Database query error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ==> API tính top khách hàng mua nhiều sản phẩm nhất <==
+app.get('/api/top-users', async (req, res) => {
+    const query = `
+        SELECT 
+            ND.TenNguoiDung,
+            TK.TenDangNhap,
+            ND.Email,
+            COALESCE(SUM(CTDH.SoLuong), 0) AS totalBought
+        FROM 
+            NGUOIDUNG ND
+        JOIN
+            DONHANG DH ON ND.MaNguoiDung = DH.MaNguoiDung
+        LEFT JOIN
+            CHITIETDONHANG CTDH ON DH.MaDonHang = CTDH.MaDonHang
+        LEFT JOIN 
+            TAIKHOAN TK ON ND.MaNguoiDung = TK.MaTaiKhoan
+        WHERE 
+            CTDH.TrangThai != 'Đã Hủy'
+        GROUP BY 
+            ND.MaNguoiDung, TK.TenDangNhap, ND.TenNguoiDung, ND.Email
+        ORDER BY 
+            totalBought DESC
+        LIMIT 5;
+    `;
+
+    try {
+        const [results] = await db.execute(query);
+        console.log("Results from DB:", results);
+        res.json(results);
+    } catch (err) {
+        console.error("Database query error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+  
+  
+  
 
 // ==> API TAIKHOAN <==
 
@@ -842,6 +1295,8 @@ app.post('/login', async (req, res) => {
         return res.status(500).json({ message: 'Đã xảy ra lỗi khi đăng nhập' });
     }
 });
+
+//-------------------------------------------//
 
 // app.post('/login', async (req, res) => {
 //     const { username, password } = req.body;
@@ -971,6 +1426,16 @@ app.put('/data/update/accounts/:id', async (req, res) => {
 })
 
 
+// ==> Logout <==
+app.post('/api/logout', (req, res) => {
+    // Xóa token khỏi cookie
+    res.clearCookie('token', { path: '/' }); // Xóa token khỏi cookie
+
+    // Phản hồi đăng xuất thành công
+    res.status(200).json({ message: 'Logged out successfully' });
+});
+
+
 // ==> API NGUOIDUNG <==
 app.get('/data/users', async (req, res) => {
     try {
@@ -1078,7 +1543,7 @@ app.delete('/data/delete/users/:id', async (req, res) => {
 // ==> API SANPHAM <==
 app.get('/data/products', async (req, res) => {
     try {
-        const [results] = await db.query('SELECT * FROM SANPHAM');
+        const [results] = await db.query('SELECT * FROM SANPHAM ORDER BY RAND()');
         res.json({ products: results });
     } catch (err) {
         console.error('Lỗi khi lấy danh sách sản phẩm:', err);
@@ -1106,9 +1571,10 @@ app.get('/data/search/products', async (req, res) => {
 });
 
 
-const upload = multer({ storage: storage });
+// const upload = multer({ storage: storage });
 
-app.post('/data/create/products', upload.fields([
+
+app.post('/data/create/products', uploadTebi.fields([
     { name: 'HinhAnhChinh', maxCount: 1 },
     { name: 'AnhChiTiet01', maxCount: 1 },
     { name: 'AnhChiTiet02', maxCount: 1 },
@@ -1120,11 +1586,11 @@ app.post('/data/create/products', upload.fields([
         req.body.MaLoai,
         req.body.TenSanPham,
         req.body.MoTa,
-        req.files.HinhAnhChinh ? req.files.HinhAnhChinh[0].filename : null,
-        req.files.AnhChiTiet01 ? req.files.AnhChiTiet01[0].filename : null,
-        req.files.AnhChiTiet02 ? req.files.AnhChiTiet02[0].filename : null,
-        req.files.AnhChiTiet03 ? req.files.AnhChiTiet03[0].filename : null,
-        req.files.AnhChiTiet04 ? req.files.AnhChiTiet04[0].filename : null,
+        req.files.HinhAnhChinh ? req.files.HinhAnhChinh[0].location : null,
+        req.files.AnhChiTiet01 ? req.files.AnhChiTiet01[0].location : null,
+        req.files.AnhChiTiet02 ? req.files.AnhChiTiet02[0].location : null,
+        req.files.AnhChiTiet03 ? req.files.AnhChiTiet03[0].location : null,
+        req.files.AnhChiTiet04 ? req.files.AnhChiTiet04[0].location : null,
         req.body.GiaBan,
         req.body.SoLuong,
         req.body.ThuongHieu
@@ -1139,7 +1605,7 @@ app.post('/data/create/products', upload.fields([
     }
 });
 
-app.put('/data/update/products/:id', upload.fields([
+app.put('/data/update/products/:id', uploadTebi.fields([
     { name: 'HinhAnhChinh', maxCount: 1 },
     { name: 'AnhChiTiet01', maxCount: 1 },
     { name: 'AnhChiTiet02', maxCount: 1 },
@@ -1156,27 +1622,27 @@ app.put('/data/update/products/:id', upload.fields([
         console.log('Received files:', req.files);
         const { HinhAnhChinh, AnhChiTiet01, AnhChiTiet02, AnhChiTiet03, AnhChiTiet04 } = req.files;
         if (HinhAnhChinh) {
-            const hinhAnhChinhPath = HinhAnhChinh[0].filename;
+            const hinhAnhChinhPath = HinhAnhChinh[0].location;
             updateQuery += ', HinhAnhChinh = ?';
             updateValues.push(hinhAnhChinhPath);
         }
         if (AnhChiTiet01) {
-            const anhChiTiet01Path = AnhChiTiet01[0].filename;
+            const anhChiTiet01Path = AnhChiTiet01[0].location;
             updateQuery += ', AnhChiTiet01 = ?';
             updateValues.push(anhChiTiet01Path);
         }
         if (AnhChiTiet02) {
-            const anhChiTiet02Path = AnhChiTiet02[0].filename;
+            const anhChiTiet02Path = AnhChiTiet02[0].location;
             updateQuery += ', AnhChiTiet02 = ?';
             updateValues.push(anhChiTiet02Path);
         }
         if (AnhChiTiet03) {
-            const anhChiTiet03Path = AnhChiTiet03[0].filename;
+            const anhChiTiet03Path = AnhChiTiet03[0].location;
             updateQuery += ', AnhChiTiet03 = ?';
             updateValues.push(anhChiTiet03Path);
         }
         if (AnhChiTiet04) {
-            const anhChiTiet04Path = AnhChiTiet04[0].filename;
+            const anhChiTiet04Path = AnhChiTiet04[0].location;
             updateQuery += ', AnhChiTiet04 = ?';
             updateValues.push(anhChiTiet04Path);
         }

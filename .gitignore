@@ -1,0 +1,18 @@
+# ========== IGNORE ADMIN ==========
+admin_tsport/
+
+# ========== NODE ==========
+node_modules/
+.env
+.env.*
+npm-debug.log*
+yarn-error.log*
+
+# ========== BUILD ==========
+dist/
+build/
+
+# ========== OS / IDE ==========
+.DS_Store
+.vscode/
+.idea/
