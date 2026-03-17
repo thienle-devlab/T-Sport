@@ -69,17 +69,17 @@ T_Sport/
 
 ## 📸 Screenshots
 ### Client UI
-![Home](assets/home.png)
-![Category](assets/category.png)
-![Product-Details](assets/product-details.png)
-![Shopping-Cart](assets/shopping-cart.png)
-![Checkout](assets/checkout.png)
-![Order-History](assets/order-history.png)
+![Home](./assets/home.png)
+![Category](./assets/category.png)
+![Product-Details](./assets/product-details.png)
+![Shopping-Cart](./assets/shopping-cart.png)
+![Checkout](./assets/checkout.png)
+![Order-History](./assets/order-history.png)
 
 ### Admin Dashboard
-![Dashboard](assets/dashboard.png)
-![Admin Category](assets/category-ad.png)
-![Product-Ad](assets/product-ad.png)
-![Category-Samples](assets/category-samples.png)
-![Admin Users](assets/users-ad.png)
-![Admin Orders](assets/orders-ad.png)
+![Dashboard](./assets/dashboard.png)
+![Admin Category](./assets/category-ad.png)
+![Product-Ad](./assets/product-ad.png)
+![Category-Samples](./assets/category-samples.png)
+![Admin Users](./assets/users-ad.png)
+![Admin Orders](./assets/orders-ad.png)
