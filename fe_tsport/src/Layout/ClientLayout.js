@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Navbar from '../component/Navbar';
 import Footer from '../component/Footer';
 
 const ClientLayout = ({ onSearch }) => {
     const [products, setProducts] = useState([]);
-    const [filteredProducts, setFilteredProducts] = useState([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [, setFilteredProducts] = useState([]);
+    const [, setSearchQuery] = useState('');
     const baseURL = process.env.REACT_APP_API_BASE_URL;
 
     useEffect(() => {
@@ -26,7 +26,7 @@ const ClientLayout = ({ onSearch }) => {
         };
 
         fetchProducts();
-    }, []);
+    }, [baseURL]);
 
     const handleSearch = (query) => {
         setSearchQuery(query);

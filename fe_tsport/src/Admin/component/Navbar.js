@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { MdNotifications, MdEmail, MdPerson, MdExitToApp, MdSettings, MdKeyboardArrowDown } from 'react-icons/md';
 import Cookies from 'js-cookie';
 import { useUser } from '../../component/UserContext';
-import Logo from '../../img/T-SPORT.png'
 import { useNavigate } from 'react-router-dom';
 
 const NavbarAd = ({ sidebarWidth }) => {
   const baseURL = process.env.REACT_APP_API_BASE_URL;
   const [showDropdown, setShowDropdown] = useState(false);
   const userName = JSON.parse(Cookies.get('user') || '{}'); // Lấy thông tin người dùng từ cookie
-  const [user, setUser] = useState(null);
+  const [, setUser] = useState(null);
   const navigate = useNavigate();
   const { logout } = useUser();
   const handleLogout = async () => {

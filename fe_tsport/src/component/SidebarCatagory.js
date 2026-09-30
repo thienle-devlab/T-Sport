@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from "flowbite-react";
 import { NavLink } from 'react-router-dom';
 
@@ -26,7 +26,7 @@ function SidebarCatagory() {
         };
     
         fetchCategories();
-      }, []);
+      }, [baseURL]);
 
   return (
     <Sidebar aria-label="Default sidebar example">

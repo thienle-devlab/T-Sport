@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import money from '../img/money.png'
 import transfer from '../img/transfer.png'
@@ -10,7 +10,7 @@ function Invoice() {
     const baseURL = process.env.REACT_APP_API_BASE_URL;
     const [paymentMethod, setPaymentMethod] = useState('Chuyển khoản');
     const [orderDate, setOrderDate] = useState('');
-    const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+    const [showSuccessMessage,] = useState(false);
     const [formData, setFormData] = useState({
         TenNguoiNhan: '',
         DiaChiGiaoHang: '',
@@ -18,7 +18,7 @@ function Invoice() {
         GhiChu: ''
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [, setError] = useState(null);
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -68,6 +68,7 @@ function Invoice() {
                         return userAction(item.MaSanPham, 'mua');
                     } else {
                         console.error('Missing MaSanPham for item', item);
+                        return null;
                     }
                 })
             );
@@ -91,7 +92,7 @@ function Invoice() {
                 throw new Error('Thanh toán thất bại');
             }
     
-            const data = await response.json();
+            // const data = await response.json();
     
             // Xử lý khi thanh toán thành công
             if (Array.isArray(selectedItems) && selectedItems.length > 0) {

@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AiOutlineClockCircle, AiOutlineCheckCircle, AiOutlineCar, AiOutlineInbox, AiOutlineClose, AiOutlineDelete } from 'react-icons/ai';
 import CommentsAndReviews from './CommentsAndReviews';
 
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
-  const [showReviewForm, setShowReviewForm] = useState(null);
+  // const [showReviewForm, setShowReviewForm] = useState(null);
   const baseURL = process.env.REACT_APP_API_BASE_URL;
 
   useEffect(() => {
@@ -28,7 +28,7 @@ const OrderHistory = () => {
     };
 
     fetchOrders();
-  }, []);
+  }, [baseURL]);
 
   // Hàm hủy đơn hàng
   const handleCancelOrder = async (orderId) => {

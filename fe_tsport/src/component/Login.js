@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { FaLock, FaSignInAlt, FaUser } from 'react-icons/fa';
 import Cookies from 'js-cookie';
@@ -10,7 +10,7 @@ function Login() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
-  const { login, logout, user } = useUser();
+  const { login,} = useUser();
 
   // const handleSubmit = async (e) => {
   //   e.preventDefault();

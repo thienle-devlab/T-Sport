@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useState } from 'react'
 import { useCart } from '../component/CartContext';
 import Search from '../component/Search';
@@ -19,7 +19,7 @@ import {
   TabGroup,
   TabList,
 } from '@headlessui/react'
-import { Bars3Icon, MagnifyingGlassIcon, ShoppingBagIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, ShoppingBagIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { TbShoppingBagCheck } from "react-icons/tb";
 
 function Navbar({ onSearch }) {
@@ -30,6 +30,7 @@ function Navbar({ onSearch }) {
   const [open, setOpen] = useState(false)
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
+  const userCookie = Cookies.get('user');
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -54,7 +55,7 @@ function Navbar({ onSearch }) {
     };
 
     fetchCategories();
-  }, []);
+  }, [baseURL]);
 
   // Cart
 const { cartItems } = useCart();
@@ -66,7 +67,6 @@ const totalQuantity = cartItems.reduce((sum, item) =>
 
   useEffect(() => {
     // Lấy thông tin người dùng từ cookie
-    const userCookie = Cookies.get('user');
     const userType = Cookies.get('LoaiNguoiDung');
     console.log(userCookie, userType);
   
@@ -87,7 +87,7 @@ const totalQuantity = cartItems.reduce((sum, item) =>
     } else {
       setUser(null);
     }
-  }, [Cookies.get('user')]);
+  }, [userCookie]);
 
   const { logout } = useUser();
   const handleLogout = async () => {
@@ -176,7 +176,7 @@ const totalQuantity = cartItems.reduce((sum, item) =>
             </TabGroup>
             <div className="space-y-6 border-t border-gray-200 px-4 py-6">
               <div className="flow-root">
-                <a href='#' className="-m-2 block p-2 font-medium text-gray-900">
+                <a href='/' className="-m-2 block p-2 font-medium text-gray-900">
                   About Us
                 </a>
               </div>
@@ -300,7 +300,7 @@ const totalQuantity = cartItems.reduce((sum, item) =>
                   )}
 
                   <a
-                    href="#"
+                    href="/"
                     className="flex items-center text-sm font-medium text-gray-700 hover:text-gray-800"
                   >
                     About Us

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Item from '../component/Item';
 import { useCart } from '../component/CartContext'
@@ -15,9 +15,9 @@ const ProductDetails = () => {
   const [selectedSize, setSelectedSize] = useState([]);
   
   const [productdetails, setProductdetails] = useState([]);
-  const [error, setError] = useState(null);
+  const [error,] = useState(null);
   const [mainImage, setMainImage] = useState(''); // Trạng thái cho ảnh chính
-  const { addToCart, getItemPrice } = useCart();
+  const { addToCart, } = useCart();
   const [isAdded, setIsAdded] = useState(false);
   const navigate = useNavigate();
 
@@ -50,7 +50,7 @@ const ProductDetails = () => {
 
     fetchProducts(); // Gọi hàm fetchProducts để thực hiện việc lấy dữ liệu
     window.scrollTo(0, 0); // Cuộn lên đầu trang mỗi khi id thay đổi
-  }, [id]);
+  }, [id, baseURL]);
 
   useEffect(() => {
     const fetchProductSample = async () => {
@@ -68,7 +68,7 @@ const ProductDetails = () => {
       }
     };
     fetchProductSample();
-  }, []);
+  }, [baseURL]);
 
   if (error) return <p>{error}</p>;
   if (!productdetails) return <p>Loading...</p>;

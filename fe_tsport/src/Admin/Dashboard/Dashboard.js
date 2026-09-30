@@ -4,7 +4,7 @@ import rank2 from '../../img/rank-2.png';
 import rank3 from '../../img/rank-3.png';
 import rank4 from '../../img/rank-4.png';
 import rank5 from '../../img/rank-5.png';
-import { Line, Bar, Pie } from 'react-chartjs-2';
+import { Line, Bar} from 'react-chartjs-2';
 import { useTable } from 'react-table';
 import {
   Chart as ChartJS,

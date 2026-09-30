@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCart } from '../component/CartContext';
 import { NavLink, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
@@ -24,7 +24,7 @@ const removeDuplicates = (items) => {
 const ShoppingCart = () => {
   // const [cartItems, setCartItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true)
-  const { cartItems=[], updateCart, totalPrice, updateQuantity, removeFromCart, toggleItemSelection } = useCart();
+  const { cartItems=[], updateCart, updateQuantity, removeFromCart, toggleItemSelection } = useCart();
   const user = Cookies.get('user') ? JSON.parse(Cookies.get('user')) : null;
   const navigate = useNavigate();
 
@@ -56,7 +56,7 @@ const ShoppingCart = () => {
         console.error('Error fetching cart items:', error);
         setIsLoading(false);
     }
-}, [isLoading, updateCart]);
+}, [isLoading, updateCart,]);
 
   useEffect(() => {
     if (user && isLoading) {

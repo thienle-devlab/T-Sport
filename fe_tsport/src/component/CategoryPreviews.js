@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Men from '../img/Men.jpg';
 import Women from '../img/Women.jpg';
 import Kids from '../img/Kids.jpg';
@@ -51,7 +51,7 @@ function CategoryPreviews() {
     };
 
     fetchCategories();
-  }, []);
+  }, [baseURL]);
 
   return (
     <div className="bg-gray-100">

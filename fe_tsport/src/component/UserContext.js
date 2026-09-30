@@ -1,5 +1,5 @@
 // AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 import Cookies from 'js-cookie';
 
 export const UserContext = createContext();

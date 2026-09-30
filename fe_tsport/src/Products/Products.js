@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import SidebarCatagory from '../component/SidebarCatagory'
 import { useParams } from 'react-router-dom'
 import Item from '../component/Item'
@@ -28,7 +28,7 @@ function Products() {
       };
   
       fetchProducts(); // Gọi hàm fetchProducts để thực hiện việc lấy dữ liệu
-    }, []);
+    }, [baseURL]);
 
       // Lọc sản phẩm dựa trên loại đã chọn
       const filteredProducts = products.filter(product => product.MaLoai === Number(id));

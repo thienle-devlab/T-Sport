@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import { NavLink } from 'react-router-dom';
 import Cookies from 'js-cookie';
@@ -18,7 +18,7 @@ function ProductsList() {
   // Tính toán các sản phẩm cho trang hiện tại
   const indexOfLastProduct = currentPage * productsPerPage;
   const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
-  const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
+  // const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
 
   // Thay đổi trang
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -110,12 +110,12 @@ function ProductsList() {
     };
 
     fetchAllData();
-  }, []);
+  }, [baseURL]);
 
   // Gọi api hành vi người dùng
   const userAction = async (MaSanPham, LoaiHanhVi) => {
     try{
-      const response = await fetch('http://localhost:3001/api/user-action', {
+      const response = await fetch(`${baseURL}/api/user-action`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

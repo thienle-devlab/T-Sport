@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 
 const CartContext = createContext();
@@ -53,28 +53,28 @@ export const CartProvider = ({ children }) => {
     setCartItems(newItems);
   }, []);
 
-  const updateDatabase = useCallback(async (updatedItems) => {
-    try {
-      const itemsToSend = updatedItems.map(({ markedForAction, ...item }) => item);
-      const response = await fetch(`${baseURL}/api/cart/update`, { //http://localhost:3001/api/cart/update
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(itemsToSend),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to update cart in database');
-      }
-      // Nếu server trả về dữ liệu mới, bạn có thể cập nhật state ở đây
-      const data = await response.json();
-      return data.cartItems;
-    } catch (error) {
-      console.error('Error updating cart:', error);
-      throw error;
-    }
-  }, []);
+  // const updateDatabase = useCallback(async (updatedItems) => {
+  //   try {
+  //     const itemsToSend = updatedItems.map(({ markedForAction, ...item }) => item);
+  //     const response = await fetch(`${baseURL}/api/cart/update`, { //http://localhost:3001/api/cart/update
+  //       method: 'PUT',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       credentials: 'include',
+  //       body: JSON.stringify(itemsToSend),
+  //     });
+  //     if (!response.ok) {
+  //       throw new Error('Failed to update cart in database');
+  //     }
+  //     // Nếu server trả về dữ liệu mới, bạn có thể cập nhật state ở đây
+  //     const data = await response.json();
+  //     return data.cartItems;
+  //   } catch (error) {
+  //     console.error('Error updating cart:', error);
+  //     throw error;
+  //   }
+  // }, []);
 
   const toggleItemSelection = useCallback(async (MaMucGioHang) => {
     console.log('Toggling item selection:', MaMucGioHang);
@@ -118,7 +118,7 @@ export const CartProvider = ({ children }) => {
       console.error('Error toggling item selection:', error);
       // Có thể thêm xử lý lỗi ở đây, ví dụ: hiển thị thông báo cho người dùng
     }
-  }, [cartItems]);
+  }, [cartItems, baseURL]);
 
     // Cập nhật sản phẩm trong giỏ hàng
     const updateQuantity = useCallback(async (MaMucGioHang, newQuantity, isSelected) => {
@@ -154,7 +154,7 @@ export const CartProvider = ({ children }) => {
           console.error('Error updating quantity:', error);
           // Hiển thị thông báo lỗi cho người dùng
       }
-  }, []);
+  }, [baseURL]);
 
 // Xóa sản phẩm trong giỏ hàng
 const removeFromCart = useCallback(async (MaMucGioHang) => {
@@ -182,7 +182,7 @@ const removeFromCart = useCallback(async (MaMucGioHang) => {
     console.error('Error removing item:', error);
     // Hiển thị thông báo lỗi cho người dùng
   }
-}, []);
+}, [baseURL]);
 
 const removeItemsFromCart = useCallback((itemsToRemove) => {
   setCartItems(prevItems => 

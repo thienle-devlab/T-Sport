@@ -1,13 +1,13 @@
-import logo from './logo.svg';
+// import logo from './logo.svg';
 import './App.css';
-import Navbar from './component/Navbar';
+// import Navbar from './component/Navbar';
 import Home from './Home/Home';
-import Footer from './component/Footer';
-import { BrowserRouter, Route, Router, Routes } from 'react-router-dom';
+// import Footer from './component/Footer';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Products from './Products/Products';
-import bannerKids from './img/banner-kids.jpg'
-import bannerMen from './img/banner-men.jpg'
-import bannerWomen from './img/banner-women.jpg'
+// import bannerKids from './img/banner-kids.jpg'
+// import bannerMen from './img/banner-men.jpg'
+// import bannerWomen from './img/banner-women.jpg'
 import ProductDetails from './ProductDetails/ProductDetails';
 import { CartProvider } from './component/CartContext';
 import ShoppingCart from './ShoppingCart/ShoppingCart';
@@ -34,8 +34,8 @@ import ProtectedRoute from './component/ProtectedRoute';
 function App() {
   const baseURL = process.env.REACT_APP_API_BASE_URL;
   const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [, setFilteredProducts] = useState([]);
+  const [, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -54,7 +54,7 @@ function App() {
     };
 
     fetchProducts();
-  }, []);
+  }, [baseURL]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FaCheck, FaTimes, FaTruck, FaBox, FaExclamationCircle, FaShippingFast, FaTrash } from 'react-icons/fa';
 
 const ORDER_STATUS = {
@@ -16,7 +16,10 @@ const OrdersAd = () => {
   const [error, setError] = useState(null);
   const baseURL = process.env.REACT_APP_API_BASE_URL;
 
-  const fetchOrders = async () => {
+  
+
+  useEffect(() => {
+    const fetchOrders = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -40,9 +43,8 @@ const OrdersAd = () => {
     }
   };
 
-  useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [baseURL]);
 
   // Xử lý cập nhật trạng thái đơn hàng
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
@@ -111,9 +113,9 @@ const OrdersAd = () => {
   };
 
   // Tạo hàm helper để lọc và nhóm items theo status
-  const getItemsByStatus = (items, status) => {
-    return items.filter(item => item.status === status);
-  };
+  // const getItemsByStatus = (items, status) => {
+  //   return items.filter(item => item.status === status);
+  // };
 
   //Trạng thái đơn hàng
   const OrderStatusActions = ({ order }) => {

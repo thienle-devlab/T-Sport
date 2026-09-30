@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Item from '../component/Item';
 
@@ -28,7 +28,7 @@ const SearchItems = () => {
     };
 
     fetchProducts();
-  }, []);
+  }, [baseURL]);
 
   useEffect(() => {
     setSearchQuery(query || '');

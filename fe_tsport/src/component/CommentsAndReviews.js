@@ -1,16 +1,16 @@
-import React, { useState } from 'react'
-import { FaStar, FaStarHalfAlt } from 'react-icons/fa';
-import avatar from '../img/avatar.jpg'
+import { useState } from 'react'
+import { FaStar} from 'react-icons/fa';
+// import avatar from '../img/avatar.jpg'
 
 function CommentsAndReviews({productId}) {
     const [isShowReviewForm, setIsShowReviewForm] = useState(false);
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
-    const [reviews, setReviews] = useState([]);
-    const [starPercentages, setStarPercentages] = useState([]);
-    const [uniqueReviews, setUniqueReviews] = useState([]);
-    const [averageStars, setAverageStars] = useState(0);
-    const [isShowAllReviews, setIsShowAllReviews] = useState(false);
+    const [, setReviews] = useState([]);
+    // const [starPercentages, setStarPercentages] = useState([]);
+    // const [uniqueReviews, setUniqueReviews] = useState([]);
+    // const [averageStars, setAverageStars] = useState(0);
+    // const [isShowAllReviews, setIsShowAllReviews] = useState(false);
     const baseURL = process.env.REACT_APP_API_BASE_URL;
 
       // Hàm gửi bình luận và đánh giá

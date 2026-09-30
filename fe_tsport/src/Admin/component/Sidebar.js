@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
-  MdDashboard, 
   MdMenu, 
   MdChevronLeft,
-  MdShoppingBasket,
   MdExpandLess,
   MdExpandMore
 } from 'react-icons/md';

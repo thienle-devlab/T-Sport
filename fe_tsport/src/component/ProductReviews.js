@@ -4,12 +4,12 @@ import avatar from '../img/avatar.jpg'
 
 const ProductReviews = ({productId}) => {
   const baseURL = process.env.REACT_APP_API_BASE_URL;
-  const [isShowReviewForm, setIsShowReviewForm] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
+  // const [isShowReviewForm, setIsShowReviewForm] = useState(false);
+  // const [rating, setRating] = useState(0);
+  // const [comment, setComment] = useState('');
   const [reviews, setReviews] = useState([]);
   const [starPercentages, setStarPercentages] = useState([]);
-  const [uniqueReviews, setUniqueReviews] = useState([]);
+  // const [uniqueReviews, setUniqueReviews] = useState([]);
   const [averageStars, setAverageStars] = useState(0);
   const [isShowAllReviews, setIsShowAllReviews] = useState(false);
 
@@ -75,7 +75,7 @@ useEffect(() => {
     };
 
     fetchReviews();
-  }, [productId]);
+  }, [productId, baseURL]);
 
   const displayedReviews = isShowAllReviews ?  reviews : reviews.slice(0, 3);
 
