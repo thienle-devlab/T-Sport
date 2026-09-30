@@ -1,4 +1,3 @@
-import React from 'react'
 import Invoice from '../component/Invoice'
 
 function Checkout() {

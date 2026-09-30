@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchData, editData, deleteData, createData } from '../API/handleCRUD';
 import { CiCirclePlus } from 'react-icons/ci';
 import { FaRegEdit } from 'react-icons/fa';
