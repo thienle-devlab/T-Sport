@@ -21,7 +21,7 @@ const port = process.env.PORT || 3001
 
 app.use(cors(
     {
-        origin: ['http://localhost:3000'], // URL của ứng dụng front-end và dashboard , 'http://localhost:3002'
+        origin: ['http://localhost:3000', 'https://t-sport-cx74b24zp-le-thien.vercel.app/'], // URL của ứng dụng front-end và dashboard , 'http://localhost:3002'
         credentials: true // Cho phép gửi cookies và thông tin xác thực
     }
 ))
