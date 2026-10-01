@@ -8,45 +8,58 @@ export const CartProvider = ({ children }) => {
   const [totalPrice, setTotalPrice] = useState(0);
   const baseURL = process.env.REACT_APP_API_BASE_URL;
 
-  const addToCart = (product, price, quantity, idSample, selectedColor, selectedSize, selectedStyle) => {
-    console.log('Adding to cart:', { product, price, quantity, idSample, selectedColor, selectedSize, selectedStyle });
-    setCartItems(prevItems => {
-      const existingItemIndex = prevItems.findIndex(item => 
-        item.MaSanPham === product.MaSanPham &&
-        item.idSample === idSample &&
-        item.MauSac === selectedColor &&
-        item.KichThuoc === selectedSize &&
-        item.KieuDang === selectedStyle
-      );
-  
-      if (existingItemIndex !== -1) {
-        // Nếu mục đã tồn tại, cập nhật nó
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex] = {
-          ...updatedItems[existingItemIndex],
-          SoLuongSanPham: (parseInt(updatedItems[existingItemIndex].SoLuongSanPham) || 0) + parseInt(quantity),
-          GiaBan: price
-        };
-        return updatedItems;
-      } else {
-        // Nếu mục chưa tồn tại, thêm mục mới
-        return [...prevItems, {
-          ...product,
-          MaMucGioHang: Date.now().toString(), // Tạo một ID duy nhất cho mục giỏ hàng mới
-          GiaBan: price,
-          idSample: idSample,
-          SoLuongSanPham: parseInt(quantity) || 1,
-          MauSac: selectedColor || '',
-          KichThuoc: selectedSize || '',
-          KieuDang: selectedStyle || '',
-          isSelected: true
-        }];
-      }
-    });
-  };
-  useEffect(() => {
-    console.log('Updated cartItems:', cartItems);
-  }, [cartItems]);
+  const addToCart = async (
+    // product,
+    price,
+    quantity,
+    MaMau,
+    // selectedColor,
+    // selectedSize,
+    // selectedStyle
+) => {
+    try {
+        const response = await fetch(`${baseURL}/api/cart/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                MaMau: MaMau,
+                SoLuongSanPham: quantity,
+                TongGiaSanPham: price * quantity
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+                errorData.message || 'Không thể thêm sản phẩm vào giỏ hàng'
+            );
+        }
+
+        // Backend đã cập nhật DB thành công
+        // Lấy lại dữ liệu chính xác từ DB
+        const cartResponse = await fetch(`${baseURL}/api/cart`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+        });
+
+        if (!cartResponse.ok) {
+            throw new Error('Không thể lấy lại giỏ hàng');
+        }
+
+        const cartData = await cartResponse.json();
+
+        setCartItems(cartData);
+
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+    }
+};
 
 
   const updateCart = useCallback((newItems) => {

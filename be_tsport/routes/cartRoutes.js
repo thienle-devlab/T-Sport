@@ -11,19 +11,19 @@ router.get('/api/cart', authenticateToken, async (req, res) => {
     try {
         const [cartItems] = await db.query(`
              SELECT 
-                MucGioHang.*, 
-                SanPham.MaSanPham,
-                SanPham.TenSanPham, 
-                SanPham.HinhAnhChinh, 
-                SanPham.GiaBan,
-                MauSanPham.MauSac,
-                MauSanPham.KichThuoc,
-                MauSanPham.KieuDang
-            FROM GioHang
-            JOIN MucGioHang ON GioHang.ID = MucGioHang.IdGioHang
-            JOIN MauSanPham ON MucGioHang.MaMau = MauSanPham.MaMau
-            JOIN SanPham ON MauSanPham.MaSanPham = SanPham.MaSanPham
-            WHERE GioHang.MaNguoiDung = ? AND MucGioHang.TrangThai = 'Chưa mua'
+                MUCGIOHANG.*, 
+                SANPHAM.MaSanPham,
+                SANPHAM.TenSanPham, 
+                SANPHAM.HinhAnhChinh, 
+                SANPHAM.GiaBan,
+                MAUSANPHAM.MauSac,
+                MAUSANPHAM.KichThuoc,
+                MAUSANPHAM.KieuDang
+            FROM GIOHANG
+            JOIN MUCGIOHANG ON GIOHANG.ID = MUCGIOHANG.IdGioHang
+            JOIN MAUSANPHAM ON MUCGIOHANG.MaMau = MAUSANPHAM.MaMau
+            JOIN SANPHAM ON MAUSANPHAM.MaSanPham = SANPHAM.MaSanPham
+            WHERE GIOHANG.MaNguoiDung = ? AND MUCGIOHANG.TrangThai = 'Chưa mua'
         `, [MaNguoiDung]);
 
         res.json(cartItems);
@@ -43,7 +43,7 @@ router.post('/api/cart/add', authenticateToken, async (req, res) => {
 
         // Kiểm tra xem người dùng đã có giỏ hàng chưa
         let [existingCart] = await db.query(
-            'SELECT ID FROM GioHang WHERE MaNguoiDung = ?',
+            'SELECT ID FROM GIOHANG WHERE MaNguoiDung = ?',
             [MaNguoiDung]
         );
 
@@ -51,7 +51,7 @@ router.post('/api/cart/add', authenticateToken, async (req, res) => {
         if (existingCart.length === 0) {
             // Nếu chưa có giỏ hàng, tạo mới
             const [newCart] = await db.query(
-                'INSERT INTO GioHang (MaNguoiDung, GiaTriGioHang) VALUES (?, 0)',
+                'INSERT INTO GIOHANG (MaNguoiDung, GiaTriGioHang) VALUES (?, 0)',
                 [MaNguoiDung]
             );
             cartId = newCart.insertId;
@@ -61,27 +61,27 @@ router.post('/api/cart/add', authenticateToken, async (req, res) => {
 
         // Kiểm tra xem sản phẩm đã có trong mục giỏ hàng chưa
         const [existingItem] = await db.query(
-            'SELECT * FROM MucGioHang WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
+            'SELECT * FROM MUCGIOHANG WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
             [cartId, MaMau]
         );
 
         if (existingItem.length > 0) {
             // Nếu sản phẩm đã tồn tại, cập nhật số lượng và tổng giá
             await db.query(
-                'UPDATE MucGioHang SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
+                'UPDATE MUCGIOHANG SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
                 [SoLuongSanPham, TongGiaSanPham, cartId, MaMau]
             );
         } else {
             // Nếu sản phẩm chưa tồn tại, thêm mới vào mục giỏ hàng
             await db.query(
-                'INSERT INTO MucGioHang (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham, TrangThai) VALUES (?, ?, ?, ?, "Chưa mua")',
+                'INSERT INTO MUCGIOHANG (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham, TrangThai) VALUES (?, ?, ?, ?, "Chưa mua")',
                 [cartId, MaMau, SoLuongSanPham, TongGiaSanPham]
             );
         }
 
         // Cập nhật tổng giá trị giỏ hàng
         await db.query(
-            'UPDATE GioHang SET GiaTriGioHang = (SELECT IFNULL(SUM(TongGiaSanPham), 0) FROM MucGioHang WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
+            'UPDATE GIOHANG SET GiaTriGioHang = (SELECT IFNULL(SUM(TongGiaSanPham), 0) FROM MUCGIOHANG WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
             [cartId, cartId]
         );
 
@@ -130,9 +130,10 @@ router.put('/api/cart/update-quantity', authenticateToken, async (req, res) => {
       const updateGioHangQuery = `
         UPDATE GIOHANG g
         SET g.GiaTriGioHang = (
-          SELECT SUM(m.TongGiaSanPham)
-          FROM MUCGIOHANG m
-          WHERE m.IdGioHang = g.ID AND m.isSelected = TRUE
+            SELECT COALESCE(SUM(m.TongGiaSanPham), 0)
+            FROM MUCGIOHANG m
+            WHERE m.IdGioHang = g.ID
+              AND m.isSelected = TRUE
         )
         WHERE g.MaNguoiDung = ?
       `;

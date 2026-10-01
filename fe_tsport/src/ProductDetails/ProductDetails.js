@@ -81,86 +81,55 @@ const ProductDetails = () => {
 
   const handleAddToCart = async () => {
     if (productdetails) {
-      const selectedSample = productSample.find(sample =>
-        sample.MaSanPham === productdetails.MaSanPham &&
-        (sample.MauSac === selectedColor || !sample.MauSac) &&
-        (sample.KichThuoc === selectedSize || !sample.KichThuoc) &&
-        (sample.KieuDang === selectedStyle || !sample.KieuDang)
-      );
 
-      if (selectedSample) {
-        const price = productdetails.GiaBan;
-        console.log('Price from productdetails:', price);
+        const selectedSample = productSample.find(sample =>
+            sample.MaSanPham === productdetails.MaSanPham &&
+            (sample.MauSac === selectedColor || !sample.MauSac) &&
+            (sample.KichThuoc === selectedSize || !sample.KichThuoc) &&
+            (sample.KieuDang === selectedStyle || !sample.KieuDang)
+        );
 
-        if (typeof price !== 'number' || isNaN(price)) {
-          console.error('Giá bán không hợp lệ:', price);
-          alert('Không thể thêm sản phẩm vào giỏ hàng do giá không hợp lệ.');
-          return;
+        if (!selectedSample) {
+            alert('Vui lòng chọn đầy đủ thông tin sản phẩm.');
+            return;
         }
 
-        addToCart(
-          productdetails,
-          price,
-          1,
-          selectedColor || '',
-          selectedSize || '',
-          selectedStyle || ''
+        const price = productdetails.GiaBan;
+
+        console.log('Price from productdetails:', price);
+        console.log('Selected sample:', selectedSample);
+
+        if (typeof price !== 'number' || isNaN(price)) {
+            console.error('Giá bán không hợp lệ:', price);
+            alert('Không thể thêm sản phẩm vào giỏ hàng do giá không hợp lệ.');
+            return;
+        }
+
+        // Kiểm tra đăng nhập TRƯỚC khi thêm vào giỏ
+        const user = Cookies.get('user');
+
+        console.log('User from cookie:', user);
+
+        if (!user) {
+            console.error('No user found in cookie');
+            navigate('/login');
+            return;
+        }
+
+        // MaMau chính là ID của biến thể sản phẩm
+        const MaMau = selectedSample.MaMau;
+
+        await addToCart(
+            price,
+            1,
+            MaMau
         );
 
         setIsAdded(true);
-        setTimeout(() => setIsAdded(false), 3000);
 
-        const user = Cookies.get('user'); // đọc cookies user trong Login
-    console.log('Token from cookie:', user);
-
-    if (!user) {
-      console.error('No token found in cookie');
-      // window.location.href = 'http://localhost:3000/login';
-      navigate('/login');
-      return;
-    }
-
-    try {
-      console.log('Sending request to add item to cart...');
-      const response = await fetch(`${baseURL}/api/cart/add`, { //http://localhost:3001/api/cart/add
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${user}`
-        },
-        body: JSON.stringify({
-          MaMau: selectedSample.MaMau,
-          SoLuongSanPham: 1,
-          TongGiaSanPham: price,
-          MaNguoiDung: user.MaNguoiDung
-        }),
-        credentials: 'include'
-      });
-
-      console.log('Response status:', response.status);
-      const responseData = await response.json();
-      console.log('Response data:', responseData);
-
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to add item to cart');
-      }
-
-      console.log('Item added to cart successfully');
-
-      // Gọi API hành vi người dùng sau khi thêm sản phẩm vào giỏ hàng
-      await userAction(productdetails.MaSanPham, 'ThemGioHang');
-
-    } catch (error) {
-      console.error('Error adding item to cart:', error.message);
-      if (error.message === 'No token provided' || error.message === 'Invalid token') {
-        console.log('Token is invalid or missing. Redirecting to login...');
-        // window.location.href = 'http://localhost:3000/login';
-        navigate('/login');
-      }
-    }
-      } else {
-        alert('Vui lòng chọn đầy đủ thông tin');
-      }
+        setTimeout(() => {
+            setIsAdded(false);
+        }, 3000);
     }
   };
 

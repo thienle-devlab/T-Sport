@@ -6,20 +6,20 @@ import Cookies from 'js-cookie';
 const baseURL = process.env.REACT_APP_API_BASE_URL;
 
 // Hàm loại bỏ các mục trùng lặp trong giỏ hàng
-const removeDuplicates = (items) => {
-  const uniqueItems = [];
-  const seenKeys = new Set();
+// const removeDuplicates = (items) => {
+//   const uniqueItems = [];
+//   const seenKeys = new Set();
 
-  for (const item of items) {
-    const key = `${item.MaSanPham}-${item.MauSac}-${item.KichThuoc}-${item.KieuDang}`;
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key);
-      uniqueItems.push(item);
-    }
-  }
+//   for (const item of items) {
+//     const key = `${item.MaSanPham}-${item.MauSac}-${item.KichThuoc}-${item.KieuDang}`;
+//     if (!seenKeys.has(key)) {
+//       seenKeys.add(key);
+//       uniqueItems.push(item);
+//     }
+//   }
 
-  return uniqueItems;
-};
+//   return uniqueItems;
+// };
 
 const ShoppingCart = () => {
   // const [cartItems, setCartItems] = useState([]);
@@ -30,33 +30,38 @@ const ShoppingCart = () => {
 
   const fetchCartItems = useCallback(async () => {
     if (!isLoading) return;
+
     try {
-        const response = await fetch(`${baseURL}/api/cart`, { //http://localhost:3001/api/cart
+        const response = await fetch(`${baseURL}/api/cart`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
             },
             credentials: 'include'
         });
+
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
+
         const data = await response.json();
-        
-        // Tạo mảng itemsWithSelection với giá trị isSelected
+
         const itemsWithSelection = data.map(item => ({
             ...item,
-            isSelected: item.isSelected !== undefined ? item.isSelected : true // Thiết lập giá trị mặc định nếu undefined
+            isSelected: item.isSelected !== undefined
+                ? Boolean(item.isSelected)
+                : true
         }));
 
-        // Cập nhật giỏ hàng với itemsWithSelection
-        updateCart(removeDuplicates(itemsWithSelection)); // Sử dụng itemsWithSelection ở đây
+        updateCart(itemsWithSelection);
+
         setIsLoading(false);
-    } catch (error) {
-        console.error('Error fetching cart items:', error);
-        setIsLoading(false);
-    }
-}, [isLoading, updateCart,]);
+
+      } catch (error) {
+          console.error('Error fetching cart items:', error);
+          setIsLoading(false);
+      }
+  }, [isLoading, updateCart]);
 
   useEffect(() => {
     if (user && isLoading) {
