@@ -51,9 +51,16 @@ T_Sport/
 │  ├─ package.json
 │  └─ tailwind.config.js
 ├─ be_tsport/                     # Backend API server
-│  ├─ server.js                   # Express entrypoint
+│  ├─ config/                     # Application configuration
+│  │  └─ ...
+│  ├─ routes/                     # API route definitions
+│  │  └─ ...
+│  ├─ services/                   # Business logic and service layer
+│  │  └─ ...
+│  ├─ app.js                      # Express application configuration
+│  ├─ server.js                   # Server entrypoint
 │  ├─ connect.js                  # Database connection
-│  ├─ authMiddleware.js           # Auth middleware
+│  ├─ authMiddleware.js           # Authentication middleware
 │  ├─ package.json
 │  └─ ...
 └─ README.md
