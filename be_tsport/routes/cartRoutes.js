@@ -61,27 +61,27 @@ router.post('/api/cart/add', authenticateToken, async (req, res) => {
 
         // Kiểm tra xem sản phẩm đã có trong mục giỏ hàng chưa
         const [existingItem] = await db.query(
-            'SELECT * FROM MUCGIOHANG WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
+            "SELECT * FROM MUCGIOHANG WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = 'Chưa mua'",
             [cartId, MaMau]
         );
 
         if (existingItem.length > 0) {
             // Nếu sản phẩm đã tồn tại, cập nhật số lượng và tổng giá
             await db.query(
-                'UPDATE MUCGIOHANG SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = "Chưa mua"',
+                "UPDATE MUCGIOHANG SET SoLuongSanPham = SoLuongSanPham + ?, TongGiaSanPham = TongGiaSanPham + ? WHERE IdGioHang = ? AND MaMau = ? AND TrangThai = 'Chưa mua'",
                 [SoLuongSanPham, TongGiaSanPham, cartId, MaMau]
             );
         } else {
             // Nếu sản phẩm chưa tồn tại, thêm mới vào mục giỏ hàng
             await db.query(
-                'INSERT INTO MUCGIOHANG (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham, TrangThai) VALUES (?, ?, ?, ?, "Chưa mua")',
+                "INSERT INTO MUCGIOHANG (IdGioHang, MaMau, SoLuongSanPham, TongGiaSanPham, TrangThai) VALUES (?, ?, ?, ?, 'Chưa mua')",
                 [cartId, MaMau, SoLuongSanPham, TongGiaSanPham]
             );
         }
 
         // Cập nhật tổng giá trị giỏ hàng
         await db.query(
-            'UPDATE GIOHANG SET GiaTriGioHang = (SELECT IFNULL(SUM(TongGiaSanPham), 0) FROM MUCGIOHANG WHERE IdGioHang = ? AND TrangThai = "Chưa mua") WHERE ID = ?',
+            "UPDATE GIOHANG SET GiaTriGioHang = (SELECT IFNULL(SUM(TongGiaSanPham), 0) FROM MUCGIOHANG WHERE IdGioHang = ? AND TrangThai = 'Chưa mua') WHERE ID = ?",
             [cartId, cartId]
         );
 
