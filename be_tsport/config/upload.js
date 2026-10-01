@@ -1,32 +1,44 @@
 const multer = require('multer');
-const multerS3 = require('multer-s3');
-const path = require('path');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { v2: cloudinary } = require('cloudinary');
 
-// Upload ảnh với Tebi
-// Cấu hình S3 Client
-const s3 = new S3Client({
-    region: 'ap-southeast-1',
-    endpoint: "https://s3.tebi.io",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY,
-        secretAccessKey: process.env.AWS_SECRET_KEY
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+
+// Lưu file tạm trong memory dưới dạng Buffer
+const storage = multer.memoryStorage();
+
+const upload = multer({
+    storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
     }
 });
 
+const uploadToCloudinary = async (file, folder = 'product-images') => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            {
+                folder,
+                resource_type: 'image'
+            },
+            (error, result) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(result);
+                }
+            }
+        );
 
-// Cấu hình multer để sử dụng S3
-const uploadTebi = multer({
-    storage: multerS3({
-        s3: s3,
-        bucket: 'images-tsport', // Thay bằng tên bucket của bạn
-        acl: 'public-read', // Quyền truy cập vào file (có thể thay đổi theo nhu cầu)
-        contentType: multerS3.AUTO_CONTENT_TYPE, // Tự động nhận diện loại content của file
-        key: (req, file, cb) => {
-            // Đặt tên file dựa trên thời gian để tránh trùng lặp
-            cb(null, `product-images/${Date.now()}_${path.basename(file.originalname)}`);
-        }
-    })
-});
+        stream.end(file.buffer);
+    });
+};
 
-module.exports = { s3, uploadTebi };
+module.exports = {
+    upload,
+    uploadToCloudinary
+};
