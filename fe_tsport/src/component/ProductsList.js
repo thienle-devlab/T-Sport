@@ -20,21 +20,56 @@ function ProductsList() {
   const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
   // const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
 
+  // Lấy điểm đề xuất của sản phẩm
+  const getRecommendationScore = (product) =>
+    Number(
+      product.recommendationScore ??
+      product.score ??
+      product.similarityScore ??
+      0
+    );
+
+  // Sắp xếp sản phẩm đề xuất từ điểm cao xuống thấp
+  const sortedRecommendedProducts = [...recommendedProducts].sort(
+    (a, b) => getRecommendationScore(b) - getRecommendationScore(a)
+  );
+
+  // Chọn danh sách cần hiển thị
+  const displayProducts = hasUserBehavior
+    ? sortedRecommendedProducts
+    : products;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [hasUserBehavior, products, recommendedProducts]);
+
+  // Chỉ lấy sản phẩm thuộc trang hiện tại
+  const currentProducts = displayProducts.slice(
+    indexOfFirstProduct,
+    indexOfLastProduct
+  );
+
+  const totalPages = Math.ceil(
+    displayProducts.length / productsPerPage
+  );
+
   // Thay đổi trang
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber) => {
+    setCurrentPage(Math.max(1, Math.min(pageNumber, totalPages || 1)));
+  };
 
-   // Tính tổng số trang
-   const pageNumbers = [];
-   for (let i = 1; i <= Math.ceil(products.length / productsPerPage); i++) {
-     pageNumbers.push(i);
-   }
+  // Tính tổng số trang
+  const pageNumbers = [];
+  for (let i = 1; i <= totalPages; i++) {
+    pageNumbers.push(i);
+  }
 
-   // Lấy dữ liệu từ API
-   useEffect(() => {
+  // Lấy dữ liệu từ API
+  useEffect(() => {
     const fetchAllData = async () => {
       try {
         setLoading(true);
-        
+
         // Lấy thông tin người dùng từ cookie
         const userCookie = Cookies.get('user');
         console.log('User cookie:', userCookie); // Debug log
@@ -50,7 +85,7 @@ function ProductsList() {
           });
           const data = await response.json();
           console.log('Normal products data:', data); // Debug log
-          
+
           if (data && data.products && typeof data.products === 'object') {
             const productsArray = Object.values(data.products);
             setProducts(productsArray);
@@ -79,7 +114,7 @@ function ProductsList() {
             });
             const recommendationsData = await recommendationsResponse.json();
             console.log('Recommendations data:', recommendationsData); // Debug log
-            
+
             if (recommendationsData.status === 'success' && recommendationsData.data) {
               setRecommendedProducts(recommendationsData.data);
             }
@@ -94,7 +129,7 @@ function ProductsList() {
             });
             const data = await response.json();
             console.log('Normal products data for new user:', data); // Debug log
-            
+
             if (data && data.products && typeof data.products === 'object') {
               const productsArray = Object.values(data.products);
               setProducts(productsArray);
@@ -114,7 +149,7 @@ function ProductsList() {
 
   // Gọi api hành vi người dùng
   const userAction = async (MaSanPham, LoaiHanhVi) => {
-    try{
+    try {
       const response = await fetch(`${baseURL}/api/user-action`, {
         method: 'POST',
         headers: {
@@ -136,13 +171,13 @@ function ProductsList() {
     <div className="bg-slate-50">
       {loading && <div>Loading...</div>}
       {error && <div>{error}</div>}
-      
+
       {hasUserBehavior ? (
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Sản phẩm đề xuất cho bạn</h2>
-          {recommendedProducts && recommendedProducts.length > 0 ? (
+          {displayProducts.length > 0 ? (
             <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
-              {recommendedProducts.map((product) => (
+              {currentProducts.map((product) => (
                 <div key={product.MaSanPham} className="group relative">
                   <div className="aspect-h-1 aspect-w-1 w-full overflow-hidden rounded-md bg-gray-200 lg:aspect-none group-hover:opacity-75 lg:h-80">
                     <img
@@ -155,7 +190,7 @@ function ProductsList() {
                     <div>
                       <h3 className="text-sm text-gray-700">
                         <NavLink to={`/productdetails/${product.MaSanPham}`}
-                                 onClick={() => userAction(product.MaSanPham, 'Xem')}
+                          onClick={() => userAction(product.MaSanPham, 'Xem')}
                         >
                           <span aria-hidden="true" className="absolute inset-0" />
                           {product.TenSanPham}
@@ -174,9 +209,9 @@ function ProductsList() {
       ) : (
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Sản phẩm đề xuất cho bạn</h2>
-          {products && products.length > 0 ? (
+          {displayProducts && displayProducts.length > 0 ? (
             <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
-              {products.map((product) => (
+              {currentProducts.map((product) => (
                 <div key={product.MaSanPham} className="group relative">
                   <div className="aspect-h-1 aspect-w-1 w-full overflow-hidden rounded-md bg-gray-200 lg:aspect-none group-hover:opacity-75 lg:h-80">
                     <img
@@ -189,7 +224,7 @@ function ProductsList() {
                     <div>
                       <h3 className="text-sm text-gray-700">
                         <NavLink to={`/productdetails/${product.MaSanPham}`}
-                                 onClick={() => userAction(product.MaSanPham, 'Xem')}
+                          onClick={() => userAction(product.MaSanPham, 'Xem')}
                         >
                           <span aria-hidden="true" className="absolute inset-0" />
                           {product.TenSanPham}
@@ -206,37 +241,47 @@ function ProductsList() {
           )}
         </div>
       )}
-      
+
       <div className="flex flex-1 justify-between sm:hidden">
         <button
           onClick={() => paginate(currentPage - 1)}
-          disabled={currentPage === 1}
+          disabled={currentPage <= 1}
           className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Previous
         </button>
         <button
           onClick={() => paginate(currentPage + 1)}
-          disabled={currentPage === Math.ceil(products.length / productsPerPage)}
+          disabled={currentPage >= totalPages}
           className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Next
         </button>
       </div>
-      
+
       <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-gray-700">
-            Showing <span className="font-medium">{indexOfFirstProduct + 1}</span> to{' '}
-            <span className="font-medium">{Math.min(indexOfLastProduct, products.length)}</span> of{' '}
-            <span className="font-medium">{products.length}</span> results
+            Showing{' '}
+            <span className="font-medium">
+              {displayProducts.length === 0 ? 0 : indexOfFirstProduct + 1}
+            </span>
+            {' '}to{' '}
+            <span className="font-medium">
+              {Math.min(indexOfLastProduct, displayProducts.length)}
+            </span>
+            {' '}of{' '}
+            <span className="font-medium">
+              {displayProducts.length}
+            </span>
+            {' '}results
           </p>
         </div>
         <div>
           <nav aria-label="Pagination" className="isolate inline-flex -space-x-px rounded-md shadow-sm">
             <button
               onClick={() => paginate(currentPage - 1)}
-              disabled={currentPage === 1}
+              disabled={currentPage <= 1}
               className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
             >
               <span className="sr-only">Previous</span>
@@ -248,11 +293,10 @@ function ProductsList() {
                   <button
                     key={number}
                     onClick={() => paginate(number)}
-                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                      currentPage === number
-                        ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                    }`}
+                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${currentPage === number
+                      ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
+                      : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                      }`}
                   >
                     {number}
                   </button>
@@ -264,7 +308,7 @@ function ProductsList() {
             })}
             <button
               onClick={() => paginate(currentPage + 1)}
-              disabled={currentPage === Math.ceil(products.length / productsPerPage)}
+              disabled={currentPage >= totalPages}
               className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
             >
               <span className="sr-only">Next</span>
@@ -275,7 +319,7 @@ function ProductsList() {
       </div>
     </div>
   );
-  
+
 }
 
 export default ProductsList
