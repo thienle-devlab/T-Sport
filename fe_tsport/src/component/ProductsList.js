@@ -113,7 +113,10 @@ function ProductsList() {
               }
             });
             const recommendationsData = await recommendationsResponse.json();
-            console.log('Recommendations data:', recommendationsData); // Debug log
+            console.log(
+              'Recommendations data:',
+              JSON.stringify(recommendationsData, null, 2)
+            ); // Debug log
 
             if (recommendationsData.status === 'success' && recommendationsData.data) {
               setRecommendedProducts(recommendationsData.data);
