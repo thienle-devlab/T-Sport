@@ -299,9 +299,37 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                 );
             }
 
+            const limit = Number(remainingCount);
+
+            console.log('Fallback query parameter check:', {
+                remainingCount,
+                remainingCountType: typeof remainingCount,
+                limit,
+                limitType: typeof limit,
+                excludedProductIds,
+                fallbackParams,
+                fallbackParamsTypes: fallbackParams.map(
+                    value => typeof value
+                ),
+                placeholderCount:
+                    (fallbackSql.match(/\?/g) || []).length,
+                parameterCount: fallbackParams.length
+            });
+
+            if (!Number.isSafeInteger(limit) || limit <= 0) {
+                throw new Error(
+                    `Invalid fallback LIMIT value: ${remainingCount}`
+                );
+            }
+
+            const safeFallbackParams = [
+                ...excludedProductIds,
+                limit
+            ];
+
             const [popularProducts] = await db.execute(
                 fallbackSql,
-                fallbackParams
+                safeFallbackParams
             );
 
             fallbackProducts = popularProducts.map(
