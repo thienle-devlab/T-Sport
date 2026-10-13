@@ -245,11 +245,14 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 
             // Tham số phải khớp thứ tự placeholder trong SQL:
             // các ID cần loại trừ trước, LIMIT ở cuối
-            const fallbackParams = [
-                ...excludedProductIds,
-                remainingCount
-            ];
+            
+            const limit = Number(remainingCount);
 
+            if (!Number.isSafeInteger(limit) || limit <= 0) {
+                throw new Error(`Invalid fallback LIMIT: ${remainingCount}`);
+            }
+
+            // limit là số nguyên đã được kiểm tra trước khi đưa vào SQL.
             const fallbackSql = `
                 SELECT
                     sp.*,
@@ -267,8 +270,7 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                             END
                         ) AS popularityScore
                     FROM HANHVINGUOIDUNG
-                    WHERE ThoiGian >=
-                        DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    WHERE ThoiGian >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                     GROUP BY MaSanPham
                 ) pop ON pop.MaSanPham = sp.MaSanPham
                 WHERE 1 = 1
@@ -276,61 +278,24 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                 ORDER BY
                     popularityScore DESC,
                     sp.MaSanPham ASC
-                LIMIT ?
+                LIMIT ${limit}
             `;
 
-            // Kiểm tra số placeholder và số tham số trước khi truy vấn
-            const placeholderCount =
-                (fallbackSql.match(/\?/g) || []).length;
-
-            console.log('Fallback SQL debug:', {
-                remainingCount,
-                excludedProductIds,
-                placeholderCount,
-                fallbackParams,
-                fallbackParamsLength: fallbackParams.length
-            });
-
-            if (placeholderCount !== fallbackParams.length) {
-                throw new Error(
-                    `Fallback SQL parameter mismatch: ` +
-                    `${placeholderCount} placeholders, ` +
-                    `${fallbackParams.length} parameters`
-                );
-            }
-
-            const limit = Number(remainingCount);
-
-            console.log('Fallback query parameter check:', {
-                remainingCount,
-                remainingCountType: typeof remainingCount,
+            console.log('Executing fallback query:', {
                 limit,
-                limitType: typeof limit,
-                excludedProductIds,
-                fallbackParams,
-                fallbackParamsTypes: fallbackParams.map(
-                    value => typeof value
-                ),
-                placeholderCount:
-                    (fallbackSql.match(/\?/g) || []).length,
-                parameterCount: fallbackParams.length
+                excludedCount: excludedProductIds.length,
+                exclusionPlaceholderCount:
+                    (exclusionCondition.match(/\?/g) || []).length,
+                excludedProductIds
             });
 
-            if (!Number.isSafeInteger(limit) || limit <= 0) {
-                throw new Error(
-                    `Invalid fallback LIMIT value: ${remainingCount}`
-                );
-            }
-
-            const safeFallbackParams = [
-                ...excludedProductIds,
-                limit
-            ];
-
+            // Chỉ truyền các ID tương ứng với placeholder trong NOT IN.
+            // Nếu danh sách rỗng, params là [].
             const [popularProducts] = await db.execute(
                 fallbackSql,
-                safeFallbackParams
+                excludedProductIds
             );
+
 
             fallbackProducts = popularProducts.map(
                 (product, index) => ({
