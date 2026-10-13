@@ -34,10 +34,10 @@ function Invoice() {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prevState => ({
-          ...prevState,
-          [name]: value
+            ...prevState,
+            [name]: value
         }));
-      };
+    };
 
     const handlePaymentMethodChange = (event) => {
         setPaymentMethod(event.target.value);
@@ -55,26 +55,17 @@ function Invoice() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setIsLoading(true);
-        setError(null);
-    
-        try {
-        
-        // Gọi api hành vi người dùng (mã sản phẩm và hành vi 'mua')
-        if (selectedItems.length > 0) {
-            await Promise.all(
-                IdItems.map(item => {
-                    if (item.MaSanPham) { // Kiểm tra MaSanPham có hợp lệ
-                        return userAction(item.MaSanPham, 'mua');
-                    } else {
-                        console.error('Missing MaSanPham for item', item);
-                        return null;
-                    }
-                })
-            );
+
+        if (!Array.isArray(selectedItems) || selectedItems.length === 0) {
+            setError('Vui lòng chọn sản phẩm để thanh toán.');
+            return;
         }
 
-            const response = await fetch(`${baseURL}/api/checkout`, { //http://localhost:3001/api/checkout
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${baseURL}/api/checkout`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -84,26 +75,30 @@ function Invoice() {
                     selectedItems,
                     TongTien: total,
                     ...formData,
-                    PhuongThucThanhToan: paymentMethod
+                    PhuongThucThanhToan: paymentMethod,
                 }),
             });
-    
+
             if (!response.ok) {
                 throw new Error('Thanh toán thất bại');
             }
-    
-            // const data = await response.json();
-    
-            // Xử lý khi thanh toán thành công
-            if (Array.isArray(selectedItems) && selectedItems.length > 0) {
-                removeItemsFromCart(selectedItems); // Gọi hàm với selectedItems
+
+            // Chỉ ghi nhận hành vi sau khi checkout thành công.
+            if (Array.isArray(IdItems) && IdItems.length > 0) {
+                await Promise.all(
+                    IdItems
+                        .filter(item => item.MaSanPham)
+                        .map(item =>
+                            userAction(item.MaSanPham, 'Mua')
+                        )
+                );
             }
-            
-            // Hiển thị thông báo thành công
+
+            // Xóa các sản phẩm đã thanh toán khỏi giỏ hàng.
+            removeItemsFromCart(selectedItems);
+
             alert('Thanh toán thành công!');
-            // Chuyển hướng đến trang lịch sử đơn hàng hoặc trang chủ
             navigate('/');
-    
         } catch (error) {
             console.error('Lỗi khi thanh toán:', error);
             setError('Đã xảy ra lỗi khi thanh toán. Vui lòng thử lại.');
@@ -112,27 +107,27 @@ function Invoice() {
         }
     };
 
-      useEffect(() => {
+    useEffect(() => {
         if (!selectedItems || selectedItems.length === 0) {
-          navigate('/cart');
+            navigate('/cart');
         }
-      }, [selectedItems, navigate]);
-      
-      if (isLoading) {
+    }, [selectedItems, navigate]);
+
+    if (isLoading) {
         return <div>Đang xử lý thanh toán...</div>;
-      }
+    }
 
     // Gọi api hành vi người dùng
     const userAction = async (MaSanPham, LoaiHanhVi) => {
         try {
             // Kiểm tra dữ liệu trước khi gửi
-        console.log("Sending user action:", { MaSanPham, LoaiHanhVi });
+            console.log("Sending user action:", { MaSanPham, LoaiHanhVi });
             const response = await fetch(`${baseURL}/api/user-action`, { //http://localhost:3001/api/user-action
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     MaSanPham,
                     LoaiHanhVi
                 }),
@@ -367,9 +362,9 @@ function Invoice() {
 
                 {/* Phần tổng tiền */}
                 <div className="flex justify-between font-bold text-lg mt-4">
-          <span>Order Total</span>
-          <span>{total?.toLocaleString('de-DE')} VND</span>
-        </div>
+                    <span>Order Total</span>
+                    <span>{total?.toLocaleString('de-DE')} VND</span>
+                </div>
 
                 {/* Nút thanh toán */}
                 <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg mt-6 hover:bg-indigo-700">

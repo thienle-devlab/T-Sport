@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Item from '../component/Item';
 import { useCart } from '../component/CartContext'
@@ -13,7 +13,7 @@ const ProductDetails = () => {
   const [selectedColor, setSelectedColor] = useState([]);
   const [selectedStyle, setSelectedStyle] = useState([])
   const [selectedSize, setSelectedSize] = useState([]);
-  
+
   const [productdetails, setProductdetails] = useState([]);
   const [error,] = useState(null);
   const [mainImage, setMainImage] = useState(''); // Trạng thái cho ảnh chính
@@ -70,6 +70,35 @@ const ProductDetails = () => {
     fetchProductSample();
   }, [baseURL]);
 
+  // Gọi api hành vi người dùng
+  const userAction = useCallback(
+    async (MaSanPham, LoaiHanhVi) => {
+      try {
+        const response = await fetch(`${baseURL}/api/user-action`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ MaSanPham, LoaiHanhVi }),
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to log user action');
+        }
+      } catch (error) {
+        console.error('Error logging user action:', error);
+      }
+    },
+    [baseURL]
+  );
+
+  useEffect(() => {
+    if (productdetails?.MaSanPham) {
+      userAction(productdetails.MaSanPham, 'Xem');
+    }
+  }, [productdetails?.MaSanPham, userAction]);
+
   if (error) return <p>{error}</p>;
   if (!productdetails) return <p>Loading...</p>;
 
@@ -82,76 +111,61 @@ const ProductDetails = () => {
   const handleAddToCart = async () => {
     if (productdetails) {
 
-        const selectedSample = productSample.find(sample =>
-            sample.MaSanPham === productdetails.MaSanPham &&
-            (sample.MauSac === selectedColor || !sample.MauSac) &&
-            (sample.KichThuoc === selectedSize || !sample.KichThuoc) &&
-            (sample.KieuDang === selectedStyle || !sample.KieuDang)
-        );
+      const selectedSample = productSample.find(sample =>
+        sample.MaSanPham === productdetails.MaSanPham &&
+        (sample.MauSac === selectedColor || !sample.MauSac) &&
+        (sample.KichThuoc === selectedSize || !sample.KichThuoc) &&
+        (sample.KieuDang === selectedStyle || !sample.KieuDang)
+      );
 
-        if (!selectedSample) {
-            alert('Vui lòng chọn đầy đủ thông tin sản phẩm.');
-            return;
-        }
+      if (!selectedSample) {
+        alert('Vui lòng chọn đầy đủ thông tin sản phẩm.');
+        return;
+      }
 
-        const price = productdetails.GiaBan;
+      const price = productdetails.GiaBan;
 
-        console.log('Price from productdetails:', price);
-        console.log('Selected sample:', selectedSample);
+      console.log('Price from productdetails:', price);
+      console.log('Selected sample:', selectedSample);
 
-        if (typeof price !== 'number' || isNaN(price)) {
-            console.error('Giá bán không hợp lệ:', price);
-            alert('Không thể thêm sản phẩm vào giỏ hàng do giá không hợp lệ.');
-            return;
-        }
+      if (typeof price !== 'number' || isNaN(price)) {
+        console.error('Giá bán không hợp lệ:', price);
+        alert('Không thể thêm sản phẩm vào giỏ hàng do giá không hợp lệ.');
+        return;
+      }
 
-        // Kiểm tra đăng nhập TRƯỚC khi thêm vào giỏ
-        const user = Cookies.get('user');
+      // Kiểm tra đăng nhập TRƯỚC khi thêm vào giỏ
+      const user = Cookies.get('user');
 
-        console.log('User from cookie:', user);
+      console.log('User from cookie:', user);
 
-        if (!user) {
-            console.error('No user found in cookie');
-            navigate('/login');
-            return;
-        }
+      if (!user) {
+        console.error('No user found in cookie');
+        navigate('/login');
+        return;
+      }
 
-        // MaMau chính là ID của biến thể sản phẩm
-        const MaMau = selectedSample.MaMau;
+      // MaMau chính là ID của biến thể sản phẩm
+      const MaMau = selectedSample.MaMau;
 
-        await addToCart(
-            price,
-            1,
-            MaMau
-        );
+      await addToCart(
+        price,
+        1,
+        MaMau
+      );
 
-        setIsAdded(true);
+      await userAction(
+        productdetails.MaSanPham,
+        'ThemGioHang'
+      );
 
-        setTimeout(() => {
-            setIsAdded(false);
-        }, 3000);
+      setIsAdded(true);
+
+      setTimeout(() => {
+        setIsAdded(false);
+      }, 3000);
     }
   };
-
-  // Gọi api hành vi người dùng
-  const userAction = async (MaSanPham, LoaiHanhVi) => {
-    try{
-      const response = await fetch(`${baseURL}/api/user-action`, { //http://localhost:3001/api/user-action
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ MaSanPham, LoaiHanhVi }),
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to log user action');
-      }
-    }
-    catch (error) {
-      console.error('Error logging user action:', error);
-    }
-  }
 
   console.log('Full Product Sample:', JSON.stringify(productSample, null, 2));
   console.log('Product details:', productdetails.MaSanPham);
@@ -293,7 +307,7 @@ const ProductDetails = () => {
       </div>
       <ProductReviews productId={productdetails.MaSanPham} />
       <h2 className="py-10 text-2xl font-bold tracking-tight text-gray-900">Các sản phẩm có liên quan</h2>
-      <Item products={filteredProducts} excludedProductId={productdetails.MaSanPham}/>
+      <Item products={filteredProducts} excludedProductId={productdetails.MaSanPham} />
     </div>
   );
 };
