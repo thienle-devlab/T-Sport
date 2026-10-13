@@ -182,42 +182,48 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 
 
   // ==> API kiểm tra hành vi người dùng <==
-  router.get('/api/user-behavior/check', async (req, res) => {
-    try {
-        // Lấy thông tin user từ cookie
-        const userCookie = req.cookies.user;
-        if (!userCookie) {
-            return res.status(401).json({ 
+router.get(
+    '/api/user-behavior/check',
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const maNguoiDung = req.user.MaNguoiDung;
+
+            if (!maNguoiDung) {
+                return res.status(401).json({
+                    hasUserBehavior: false,
+                    message: 'Không xác định được người dùng'
+                });
+            }
+
+            const [rows] = await db.execute(
+                `SELECT COUNT(*) AS behaviorCount
+                 FROM HANHVINGUOIDUNG
+                 WHERE MaNguoiDung = ?`,
+                [maNguoiDung]
+            );
+
+            const hasUserBehavior =
+                Number(rows[0].behaviorCount) > 0;
+
+            return res.status(200).json({
+                hasUserBehavior,
+                message: hasUserBehavior
+                    ? 'Người dùng có hành vi'
+                    : 'Người dùng chưa có hành vi'
+            });
+        } catch (error) {
+            console.error(
+                'Lỗi khi kiểm tra hành vi người dùng:',
+                error
+            );
+
+            return res.status(500).json({
                 hasUserBehavior: false,
-                message: 'Không tìm thấy thông tin người dùng' 
+                message: 'Lỗi khi kiểm tra hành vi người dùng'
             });
         }
-
-        const user = JSON.parse(userCookie);
-        const maNguoiDung = user.MaNguoiDung;
-
-        // Kiểm tra xem người dùng có hành vi nào không
-        const [rows] = await db.execute(`
-            SELECT COUNT(*) as behaviorCount 
-            FROM HANHVINGUOIDUNG 
-            WHERE MaNguoiDung = ?
-        `, [maNguoiDung]);
-
-        const hasUserBehavior = rows[0].behaviorCount > 0;
-
-        res.json({
-            hasUserBehavior,
-            message: hasUserBehavior ? 'Người dùng có hành vi' : 'Người dùng chưa có hành vi'
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi kiểm tra hành vi người dùng:', error);
-        res.status(500).json({ 
-            hasUserBehavior: false,
-            message: 'Đã xảy ra lỗi khi kiểm tra hành vi người dùng',
-            error: error.message 
-        });
     }
-});
+);
 
 module.exports = router;
