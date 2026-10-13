@@ -146,34 +146,34 @@ router.get('/api/top-products', async (req, res) => {
 // ==> API tính top khách hàng mua nhiều sản phẩm nhất <==
 router.get('/api/top-users', async (req, res) => {
     const query = `
-        SELECT 
+        SELECT
             ND.TenNguoiDung,
             TK.TenDangNhap,
             ND.Email,
             COALESCE(SUM(CTDH.SoLuong), 0) AS totalBought
-        FROM 
-            NGUOIDUNG ND
-        JOIN
-            DONHANG DH ON ND.MaNguoiDung = DH.MaNguoiDung
-        LEFT JOIN
-            CHITIETDONHANG CTDH ON DH.MaDonHang = CTDH.MaDonHang
-        LEFT JOIN 
-            TAIKHOAN TK ON ND.MaNguoiDung = TK.MaTaiKhoan
-        WHERE 
-            CTDH.TrangThai != 'Đã Hủy'
-        GROUP BY 
-            ND.MaNguoiDung, TK.TenDangNhap, ND.TenNguoiDung, ND.Email
-        ORDER BY 
-            totalBought DESC
+        FROM NGUOIDUNG ND
+        JOIN DONHANG DH
+            ON ND.MaNguoiDung = DH.MaNguoiDung
+        LEFT JOIN CHITIETDONHANG CTDH
+            ON DH.MaDonHang = CTDH.MaDonHang
+        LEFT JOIN TAIKHOAN TK
+            ON ND.Email = TK.Email
+        WHERE CTDH.TrangThai != 'Đã Hủy'
+        GROUP BY
+            ND.MaNguoiDung,
+            ND.TenNguoiDung,
+            ND.Email,
+            TK.TenDangNhap
+        ORDER BY totalBought DESC
         LIMIT 5;
     `;
 
     try {
         const [results] = await db.execute(query);
-        console.log("Results from DB:", results);
+        console.log('Results from DB:', results);
         res.json(results);
     } catch (err) {
-        console.error("Database query error:", err);
+        console.error('Database query error:', err);
         res.status(500).json({ error: err.message });
     }
 });
