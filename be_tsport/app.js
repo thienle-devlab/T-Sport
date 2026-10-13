@@ -7,7 +7,7 @@ const routes = require('./routes');
 const app = express();
 
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://t-sport-six.vercel.app'], // URL của front-end và dashboard
+    origin: ['http://localhost:3000', 'https://t-sport-45y343bp3-le-thien.vercel.app'], // URL của front-end và dashboard
     credentials: true // Cho phép gửi cookies và thông tin xác thực
 }));
 app.use(express.json());
