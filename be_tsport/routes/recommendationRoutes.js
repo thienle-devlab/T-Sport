@@ -69,8 +69,8 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
             if (!userProductMatrix[row.MaNguoiDung]) {
                 userProductMatrix[row.MaNguoiDung] = {};
             }
-            userProductMatrix[row.MaNguoiDung][row.MaSanPham] = 
-                (userProductMatrix[row.MaNguoiDung][row.MaSanPham] || 0) + 
+            userProductMatrix[row.MaNguoiDung][row.MaSanPham] =
+                (userProductMatrix[row.MaNguoiDung][row.MaSanPham] || 0) +
                 tinhDiemTuongTac(row.LoaiHanhVi);
         });
 
@@ -82,8 +82,8 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 
         console.log('Target User Vector:', targetUserVector);
 
-        for(const otherUserId in userProductMatrix) {
-            if(otherUserId != maNguoiDung) {
+        for (const otherUserId in userProductMatrix) {
+            if (otherUserId != maNguoiDung) {
                 const similarity = tinhDoTuongDong(
                     targetUserVector,
                     userProductMatrix[otherUserId]
@@ -98,8 +98,16 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
         console.log('Similarities:', similarities);
 
         // 4. Sắp xếp và lấy top N người dùng tương đồng nhất
-        similarities.sort((a, b) => b.similarity - a.similarity);
-        const topSimilarUsers = similarities.slice(0, 10);
+        
+        const topSimilarUsers = similarities
+            .filter(
+                user =>
+                Number.isFinite(user.similarity) &&
+                user.similarity > 0
+            )
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, 10);
+
 
         console.log('Top Similar Users:', topSimilarUsers);
 
@@ -108,67 +116,113 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
             SELECT DISTINCT MaSanPham 
             FROM HANHVINGUOIDUNG 
             WHERE MaNguoiDung = ?
+            AND LoaiHanhVi = 'Mua'
         `, [maNguoiDung]);
 
         console.log('Products Interacted:', productsInteracted);
 
-        const productsInteractedSet = new Set(
-            productsInteracted.map(p => p.MaSanPham)
+        // Chuyển thành Set để kiểm tra sản phẩm đã mua nhanh hơn
+        const purchasedProductIds = new Set(
+            productsInteracted.map(p => Number(p.MaSanPham))
         );
 
-        console.log('Products Interacted Set:', productsInteractedSet);
+        console.log(
+            'Purchased Product IDs:',
+            purchasedProductIds
+        );
 
         // 6. Tính điểm đề xuất cho các sản phẩm
         const productScores = {};
 
-        for(const similarUser of topSimilarUsers) {
+        for (const similarUser of topSimilarUsers) {
             const [userProducts] = await db.execute(`
-                SELECT MaSanPham, LoaiHanhVi 
-                FROM HANHVINGUOIDUNG 
+                SELECT MaSanPham, LoaiHanhVi
+                FROM HANHVINGUOIDUNG
                 WHERE MaNguoiDung = ?
+                  AND ThoiGian >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             `, [similarUser.userId]);
 
-            console.log(`User Products for ${similarUser.userId}:`, userProducts);
+            console.log(
+                `User Products for ${similarUser.userId}:`,
+                userProducts
+            );
 
             userProducts.forEach(product => {
-                if(!productsInteractedSet.has(product.MaSanPham)) {
-                    productScores[product.MaSanPham] = 
-                        (productScores[product.MaSanPham] || 0) + 
-                        similarUser.similarity * tinhDiemTuongTac(product.LoaiHanhVi);
+                const productId = Number(product.MaSanPham);
+
+                // Bỏ qua sản phẩm người dùng hiện tại đã mua
+                if (purchasedProductIds.has(productId)) {
+                    return;
                 }
+
+                // Tính điểm dựa trên độ tương đồng và hành vi
+                const score =
+                    similarUser.similarity *
+                    tinhDiemTuongTac(product.LoaiHanhVi);
+
+                // Cộng dồn điểm của sản phẩm
+                productScores[productId] =
+                    (productScores[productId] || 0) + score;
             });
         }
 
         console.log('Product Scores:', productScores);
 
+
         // 7. Sắp xếp và lấy top N sản phẩm đề xuất
         const recommendedProducts = Object.entries(productScores)
-            .sort(([,a], [,b]) => b - a)
+            .filter(([, score]) =>
+                Number.isFinite(score) && score > 0
+            )
+            .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
             .slice(0, soLuongDeXuat)
-            .map(([productId]) => parseInt(productId));
+            .map(([productId]) => Number(productId));
 
         console.log('Recommended Products:', recommendedProducts);
 
         // 8. Lấy thông tin chi tiết của các sản phẩm đề xuất
-        if(recommendedProducts.length > 0) {
+        if (recommendedProducts.length > 0) {
+            const productIds = recommendedProducts.join(',');
+
             const [productDetails] = await db.execute(`
-                SELECT * FROM SANPHAM 
-                WHERE MaSanPham IN (${recommendedProducts.join(',')})
+                SELECT *
+                FROM SANPHAM
+                WHERE MaSanPham IN (${productIds})
+                ORDER BY FIELD(MaSanPham, ${productIds})
             `);
 
-            console.log('Product Details:', productDetails);
+            // Bổ sung điểm gợi ý và thứ hạng cho từng sản phẩm
+            const productsWithScores = productDetails.map(
+                (product, index) => ({
+                    ...product,
+                    recommendationScore:
+                        productScores[product.MaSanPham] ?? 0,
+                    rank: index + 1
+                })
+            );
 
-            res.json({
+            console.log(
+                'Ranked Product Details:',
+                productsWithScores.map(product => ({
+                    rank: product.rank,
+                    MaSanPham: product.MaSanPham,
+                    TenSanPham: product.TenSanPham,
+                    score: product.recommendationScore
+                }))
+            );
+
+            return res.json({
                 status: 'success',
-                data: productDetails
-            });
-        } else {
-            console.log('No Recommended Products found.');
-            res.json({
-                status: 'success',
-                data: []
+                data: productsWithScores
             });
         }
+
+        // Không có sản phẩm từ Collaborative Filtering
+        return res.json({
+            status: 'success',
+            data: []
+        });
+
 
     } catch (error) {
         console.error('Lỗi khi lấy đề xuất sản phẩm:', error);
@@ -181,7 +235,7 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 });
 
 
-  // ==> API kiểm tra hành vi người dùng <==
+// ==> API kiểm tra hành vi người dùng <==
 router.get(
     '/api/user-behavior/check',
     authenticateToken,
