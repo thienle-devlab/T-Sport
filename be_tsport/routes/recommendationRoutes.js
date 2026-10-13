@@ -180,48 +180,132 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 
         console.log('Recommended Products:', recommendedProducts);
 
-        // 8. Lấy thông tin chi tiết của các sản phẩm đề xuất
-        if (recommendedProducts.length > 0) {
-            const productIds = recommendedProducts.join(',');
+        
+        // 8. Lấy thông tin sản phẩm từ Collaborative Filtering
+        let collaborativeProducts = [];
 
-            const [productDetails] = await db.execute(`
+        if (recommendedProducts.length > 0) {
+            const placeholders = recommendedProducts
+                .map(() => '?')
+                .join(',');
+
+            const [productDetails] = await db.execute(
+                `
                 SELECT *
                 FROM SANPHAM
-                WHERE MaSanPham IN (${productIds})
-                ORDER BY FIELD(MaSanPham, ${productIds})
-            `);
+                WHERE MaSanPham IN (${placeholders})
+                ORDER BY FIELD(MaSanPham, ${placeholders})
+                `,
+                [...recommendedProducts, ...recommendedProducts]
+            );
 
-            // Bổ sung điểm gợi ý và thứ hạng cho từng sản phẩm
-            const productsWithScores = productDetails.map(
+            collaborativeProducts = productDetails.map(
                 (product, index) => ({
                     ...product,
                     recommendationScore:
-                        productScores[product.MaSanPham] ?? 0,
+                        productScores[Number(product.MaSanPham)] ?? 0,
+                    recommendationSource: 'COLLABORATIVE_FILTERING',
                     rank: index + 1
                 })
             );
-
-            console.log(
-                'Ranked Product Details:',
-                productsWithScores.map(product => ({
-                    rank: product.rank,
-                    MaSanPham: product.MaSanPham,
-                    TenSanPham: product.TenSanPham,
-                    score: product.recommendationScore
-                }))
-            );
-
-            return res.json({
-                status: 'success',
-                data: productsWithScores
-            });
         }
 
-        // Không có sản phẩm từ Collaborative Filtering
+        // 9. Nếu CF chưa đủ sản phẩm, bổ sung bằng fallback
+        const remainingCount =
+            Math.max(0, soLuongDeXuat - collaborativeProducts.length);
+
+        let fallbackProducts = [];
+
+        if (remainingCount > 0) {
+            // Loại sản phẩm đã mua và sản phẩm CF đã chọn
+            const excludedProductIds = [
+                ...new Set([
+                    ...purchasedProductIds,
+                    ...collaborativeProducts.map(
+                        product => Number(product.MaSanPham)
+                    )
+                ])
+            ];
+
+            const exclusionCondition =
+                excludedProductIds.length > 0
+                    ? `AND sp.MaSanPham NOT IN (
+                        ${excludedProductIds.map(() => '?').join(',')}
+                    )`
+                    : '';
+
+            const fallbackParams = [...excludedProductIds];
+
+            fallbackParams.push(remainingCount);
+
+            const [popularProducts] = await db.execute(
+                `
+                SELECT
+                    sp.*,
+                    COALESCE(pop.popularityScore, 0) AS popularityScore
+                FROM SANPHAM sp
+                LEFT JOIN (
+                    SELECT
+                        MaSanPham,
+                        SUM(
+                            CASE LoaiHanhVi
+                                WHEN 'Xem' THEN 1
+                                WHEN 'ThemGioHang' THEN 2
+                                WHEN 'Mua' THEN 3
+                                ELSE 0
+                            END
+                        ) AS popularityScore
+                    FROM HANHVINGUOIDUNG
+                    WHERE ThoiGian >=
+                        DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY MaSanPham
+                ) pop ON pop.MaSanPham = sp.MaSanPham
+                WHERE 1 = 1
+                ${exclusionCondition}
+                ORDER BY
+                    popularityScore DESC,
+                    sp.MaSanPham ASC
+                LIMIT ?
+                `,
+                fallbackParams
+            );
+
+            fallbackProducts = popularProducts.map(
+                (product, index) => ({
+                    ...product,
+
+                    // Điểm phổ biến khác thang đo với điểm CF
+                    recommendationScore: null,
+                    popularityScore: Number(product.popularityScore),
+                    recommendationSource: 'POPULARITY',
+                    rank: collaborativeProducts.length + index + 1
+                })
+            );
+        }
+
+        // 10. Gộp kết quả CF và fallback
+        const finalProducts = [
+            ...collaborativeProducts,
+            ...fallbackProducts
+        ].slice(0, soLuongDeXuat);
+
+        console.log(
+            'Final Recommendations:',
+            finalProducts.map(product => ({
+                MaSanPham: product.MaSanPham,
+                TenSanPham: product.TenSanPham,
+                source: product.recommendationSource,
+                score: product.recommendationScore,
+                popularityScore: product.popularityScore,
+                rank: product.rank
+            }))
+        );
+
         return res.json({
             status: 'success',
-            data: []
+            data: finalProducts
         });
+
 
 
     } catch (error) {
