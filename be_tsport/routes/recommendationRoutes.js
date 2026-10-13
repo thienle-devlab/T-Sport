@@ -54,7 +54,7 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
         const soLuongDeXuat =
             Number.isInteger(requestedLimit) && requestedLimit > 0
                 ? Math.min(requestedLimit, 50)
-                : 5;
+                : 10;
 
         console.log('maNguoiDung:', maNguoiDung);
         console.log('soLuongDeXuat:', soLuongDeXuat);
