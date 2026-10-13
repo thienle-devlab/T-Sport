@@ -50,9 +50,14 @@ router.post('/api/user-action', authenticateToken, async (req, res) => {
 router.get('/api/recommendations', authenticateToken, async (req, res) => {
     try {
         const maNguoiDung = req.user.MaNguoiDung;
-        const soLuongDeXuat = parseInt(req.query.limit) || 5;
+        const requestedLimit = Number.parseInt(req.query.limit, 10);
+        const soLuongDeXuat =
+            Number.isInteger(requestedLimit) && requestedLimit > 0
+                ? Math.min(requestedLimit, 50)
+                : 5;
 
         console.log('maNguoiDung:', maNguoiDung);
+        console.log('soLuongDeXuat:', soLuongDeXuat);
 
         // 1. Lấy dữ liệu hành vi của tất cả người dùng
         const [rows] = await db.execute(`
@@ -210,9 +215,12 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
             );
         }
 
+        
         // 9. Nếu CF chưa đủ sản phẩm, bổ sung bằng fallback
-        const remainingCount =
-            Math.max(0, soLuongDeXuat - collaborativeProducts.length);
+        const remainingCount = Math.max(
+            0,
+            soLuongDeXuat - collaborativeProducts.length
+        );
 
         let fallbackProducts = [];
 
@@ -225,8 +233,9 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                         product => Number(product.MaSanPham)
                     )
                 ])
-            ];
+            ].filter(id => Number.isSafeInteger(id) && id > 0);
 
+            // Tạo placeholder tương ứng với số ID cần loại trừ
             const exclusionCondition =
                 excludedProductIds.length > 0
                     ? `AND sp.MaSanPham NOT IN (
@@ -234,12 +243,14 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                     )`
                     : '';
 
-            const fallbackParams = [...excludedProductIds];
+            // Tham số phải khớp thứ tự placeholder trong SQL:
+            // các ID cần loại trừ trước, LIMIT ở cuối
+            const fallbackParams = [
+                ...excludedProductIds,
+                remainingCount
+            ];
 
-            fallbackParams.push(remainingCount);
-
-            const [popularProducts] = await db.execute(
-                `
+            const fallbackSql = `
                 SELECT
                     sp.*,
                     COALESCE(pop.popularityScore, 0) AS popularityScore
@@ -266,15 +277,36 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
                     popularityScore DESC,
                     sp.MaSanPham ASC
                 LIMIT ?
-                `,
+            `;
+
+            // Kiểm tra số placeholder và số tham số trước khi truy vấn
+            const placeholderCount =
+                (fallbackSql.match(/\?/g) || []).length;
+
+            console.log('Fallback SQL debug:', {
+                remainingCount,
+                excludedProductIds,
+                placeholderCount,
+                fallbackParams,
+                fallbackParamsLength: fallbackParams.length
+            });
+
+            if (placeholderCount !== fallbackParams.length) {
+                throw new Error(
+                    `Fallback SQL parameter mismatch: ` +
+                    `${placeholderCount} placeholders, ` +
+                    `${fallbackParams.length} parameters`
+                );
+            }
+
+            const [popularProducts] = await db.execute(
+                fallbackSql,
                 fallbackParams
             );
 
             fallbackProducts = popularProducts.map(
                 (product, index) => ({
                     ...product,
-
-                    // Điểm phổ biến khác thang đo với điểm CF
                     recommendationScore: null,
                     popularityScore: Number(product.popularityScore),
                     recommendationSource: 'POPULARITY',
@@ -309,8 +341,11 @@ router.get('/api/recommendations', authenticateToken, async (req, res) => {
 
 
     } catch (error) {
-        console.error('Lỗi khi lấy đề xuất sản phẩm:', error);
-        res.status(500).json({
+        console.error('Error getting recommendations:', error);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+
+        return res.status(500).json({
             status: 'error',
             message: 'Lỗi khi lấy đề xuất sản phẩm',
             error: error.message
